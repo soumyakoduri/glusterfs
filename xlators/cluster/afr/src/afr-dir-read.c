@@ -152,11 +152,10 @@ int
 afr_itransform (xlator_t *this, int subvol, uint64_t x, uint64_t *y_p)
 {
         afr_private_t *conf = NULL;
-        int         cnt = 0;
+        uint64_t    cnt = 0;
         int         max = 0;
         uint64_t    y = 0;
         uint64_t    hi_mask = 0;
-        uint64_t    off_mask = 0;
         int         max_bits = 0;
 
         if (x == ((uint64_t) -1)) {
@@ -180,10 +179,10 @@ afr_itransform (xlator_t *this, int subvol, uint64_t x, uint64_t *y_p)
 
         hi_mask = ~(PRESENT_MASK >> (max_bits + 1));
 
-        if (x & hi_mask) {
+        if ((x * max) & hi_mask) {
                 /* HUGE d_off */
-                off_mask = MASK << max_bits;
-                y = TOP_BIT | ((x >> SHIFT_BITS) & off_mask) | cnt;
+                cnt = (cnt << (PRESENT_D_OFF_BITS - 1 - max_bits));
+                y = (TOP_BIT | (x >> (SHIFT_BITS + max_bits)) | cnt);
         } else {
                 /* small d_off */
                 y = ((x * max) + cnt);
@@ -202,7 +201,7 @@ afr_deitransform (xlator_t *this, uint64_t y, int *subvol_p,
                   uint64_t *x_p)
 {
         afr_private_t *conf = NULL;
-        int         cnt = 0;
+        uint64_t    cnt = 0;
         int         max = 0;
         uint64_t    x = 0;
         int         subvol = 0;
@@ -222,16 +221,16 @@ afr_deitransform (xlator_t *this, uint64_t y, int *subvol_p,
 		goto out;
 	}
 
+        max_bits = afr_bits_for (max);
+        off_mask = (PRESENT_MASK >> (1 + max_bits));
+        host_mask = ~(off_mask);
+
         if (y & TOP_BIT) {
                 /* HUGE d_off */
-                max_bits = afr_bits_for (max);
-                off_mask = (MASK << max_bits);
-                host_mask = ~(off_mask);
-
-                x = ((y & ~TOP_BIT) & off_mask) << SHIFT_BITS;
-
-                cnt = y & host_mask;
-	} else {
+                x = ((y & off_mask) << (SHIFT_BITS + max_bits));
+                cnt = ((y & ~TOP_BIT) & host_mask) >> 
+                        (PRESENT_D_OFF_BITS - 1 - max_bits);
+        } else {
                 /* small d_off */
                 cnt = y % max;
                 x = y / max;
