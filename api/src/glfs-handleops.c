@@ -14,6 +14,7 @@
 #include "syncop.h"
 #include "glfs.h"
 #include "glfs-handles.h"
+#include "statedump.h"
 
 int
 glfs_listxattr_process (void *value, size_t size, dict_t *xattr);
@@ -237,6 +238,11 @@ glfs_h_getxattrs (struct glfs *fs, struct glfs_object *object, const char *name,
         }
 
         __glfs_entry_fs (fs);
+
+        if (strncmp("user.getstatedump", name, sizeof(name)) == 0) {
+                gf_proc_dump_info(SIGUSR1, fs->ctx);
+                return 0;
+        }
 
         /* get the active volume */
         subvol = glfs_active_subvol (fs);
