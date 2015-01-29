@@ -65,6 +65,28 @@ __BEGIN_DECLS
 struct glfs;
 typedef struct glfs glfs_t;
 
+/*
+ * Following are the flag bits which need to be
+ * set by applications for special locks handling
+ * like lease_locks/share reservations.
+ */
+#define OP_LK_BYTE_RANGE     0x00000000
+#define OP_LK_LEASE          0x00000001
+#define OP_LK_SHARE_RESERV   0x00000002
+
+struct glock {
+        int    lk_cmd;
+        void   *lock_owner;
+        struct flock flock;
+};
+
+struct glfs_lock_args {
+        struct glock *lock;
+        struct glfs_fd *glfd;
+        int    reclaim;
+        int    lock_type; /* to differentiate different types of locks set */
+        void   *reserved;
+};
 
 /*
   SYNOPSIS
@@ -756,6 +778,15 @@ char *glfs_realpath (glfs_t *fs, const char *path, char *resolved_path) __THROW
  */
 int glfs_posix_lock (glfs_fd_t *fd, int cmd, struct flock *flock) __THROW
         GFAPI_PUBLIC(glfs_posix_lock, 3.4.0);
+
+/*
+ * A common Lock API, which can be used to set
+ * - Byte-range locks
+ * - Lease locks
+ * - Open Share reservations
+ */
+int glfs_common_lock (struct glfs_lock_args *glfs_lockarg) __THROW
+        GFAPI_PUBLIC(glfs_common_lock, 3.7.0);
 
 glfs_fd_t *glfs_dup (glfs_fd_t *fd) __THROW
         GFAPI_PUBLIC(glfs_dup, 3.4.0);

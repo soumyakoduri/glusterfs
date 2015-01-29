@@ -152,3 +152,8 @@ GFAPI_PRIVATE_3.7.0 {
                 glfs_resolve;
 } GFAPI_3.6.0;
 
+GFAPI_3.7.0 {
+	global:
+		glfs_common_lock;
+} GFAPI_PRIVATE_3.7.0;
+

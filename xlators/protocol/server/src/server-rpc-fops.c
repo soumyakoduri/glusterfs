@@ -5823,6 +5823,7 @@ server3_3_lk (rpcsvc_request_t *req)
         gfs3_lk_req          args  = {{0,},};
         int                  ret   = -1;
         int                  op_errno = 0;
+        int                  lkflags = 0;
 
         if (!req)
                 return ret;
@@ -5852,6 +5853,7 @@ server3_3_lk (rpcsvc_request_t *req)
         state->resolve.fd_no = args.fd;
         state->cmd =  args.cmd;
         state->type = args.type;
+        lkflags = args.lkflags;
         memcpy (state->resolve.gfid, args.gfid, 16);
 
         switch (state->cmd) {
@@ -5906,6 +5908,21 @@ server3_3_lk (rpcsvc_request_t *req)
                                       args.xdata.xdata_val,
                                       args.xdata.xdata_len, ret,
                                       op_errno, out);
+
+        /* Set dict in case of lease locks */
+        if (!state->xdata)
+                state->xdata = dict_new ();
+        if (!state->xdata) {
+                ret = -1;
+                goto out;
+        }
+        ret = dict_set_int32 (state->xdata, "set_lease",
+                             (lkflags & GF_LK_LEASE) ? 1 : 0);
+        if (ret) {
+                gf_log (THIS->name, GF_LOG_ERROR, "Failed to set lease"
+                        "flag  in request dict");
+                goto out;
+        }
 
         ret = 0;
         resolve_and_resume (frame, server_lk_resume);

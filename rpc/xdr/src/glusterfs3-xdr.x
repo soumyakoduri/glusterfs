@@ -276,8 +276,9 @@ struct   gfs3_lookup_req {
  struct gfs3_lk_req {
         opaque gfid[16];
 	int64_t         fd;
-	unsigned int        cmd;
-	unsigned int        type;
+	unsigned int    cmd;
+        unsigned int    lkflags; /* Special protocol related flags */
+	unsigned int    type;
 	struct gf_proto_flock flock;
         opaque   xdata<>; /* Extra data */
 }  ;

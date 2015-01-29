@@ -5248,6 +5248,7 @@ client3_3_lk (call_frame_t *frame, xlator_t *this,
         clnt_conf_t     *conf       = NULL;
         int              op_errno   = ESTALE;
         int              ret        = 0;
+        int              lkflags    = 0;
 
         if (!frame || !this || !data)
                 goto unwind;
@@ -5284,6 +5285,7 @@ client3_3_lk (call_frame_t *frame, xlator_t *this,
                 break;
         }
 
+        lkflags      = args->flock->l_lkflags;
         local->owner = frame->root->lk_owner;
         local->cmd   = args->cmd;
         local->fd    = fd_ref (args->fd);
@@ -5291,6 +5293,7 @@ client3_3_lk (call_frame_t *frame, xlator_t *this,
         req.fd    = remote_fd;
         req.cmd   = gf_cmd;
         req.type  = gf_type;
+        req.lkflags = lkflags;
         gf_proto_flock_from_flock (&req.flock, args->flock);
 
         memcpy (req.gfid, args->fd->inode->gfid, 16);

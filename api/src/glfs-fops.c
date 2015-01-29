@@ -3452,6 +3452,98 @@ out:
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_posix_lock, 3.4.0);
 
 
+/*
+ * In  : glfs_lockarg
+ * Out : gf_flock
+ */
+static void
+gf_get_syncop_lkinfo (struct glfs_lock_args *glfs_lockarg,
+                      struct gf_flock       *gf_flock)
+{
+        gf_lkowner_t lk_owner;
+
+        assert (glfs_lockarg);
+        assert (gf_flock);
+        assert (glfs_lockarg->lock);
+
+        gf_flock->l_len     = glfs_lockarg->lock->flock.l_len;
+        gf_flock->l_whence  = glfs_lockarg->lock->flock.l_whence;
+        gf_flock->l_start   = glfs_lockarg->lock->flock.l_start;
+        gf_flock->l_type    = glfs_lockarg->lock->flock.l_type;
+        gf_flock->l_pid     = glfs_lockarg->lock->flock.l_pid;
+
+        /*gf_flock->l_owner   = glfs_lockarg->lock->lock_owner;*/
+        gf_flock->l_lkflags  &= 0x0;
+
+        if (glfs_lockarg->lock->lock_owner) {
+                set_lk_owner_from_ptr (&lk_owner,
+                                       glfs_lockarg->lock->lock_owner);
+                syncopctx_setfslkowner (&lk_owner);
+        }
+
+        /* set lkflags accordingly */
+        switch (glfs_lockarg->lock_type) {
+        case OP_LK_LEASE:
+                gf_flock->l_lkflags |= GF_LK_LEASE;
+
+                gf_log (THIS->name, GF_LOG_ERROR,
+                        "In gf_get_syncop_lkinfo()............");
+
+                break;
+        case OP_LK_SHARE_RESERV:
+        default:
+                /* error case, bail? */
+                break;
+        }
+}
+
+
+int
+pub_glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
+{
+        int             ret         = -1;
+        xlator_t        *subvol     = NULL;
+        struct glfs_fd  *glfd       = NULL;
+        struct gf_flock gf_flock    = {0, };
+        int             cmd         = -1;
+        fd_t            *fd         = NULL;
+
+        gf_log (THIS->name, GF_LOG_ERROR, "In glfs_common_lock()........");
+
+        assert (glfs_lockarg);
+        glfd = glfs_lockarg->glfd;
+        assert (glfd);
+
+        __glfs_entry_fd (glfd);
+
+        subvol = glfs_active_subvol (glfd->fs);
+        if (!subvol) {
+                ret = -1;
+                errno = EIO;
+                goto out;
+        }
+
+        fd = glfs_resolve_fd (glfd->fs, subvol, glfd);
+        if (!fd) {
+                ret = -1;
+                errno = EBADFD;
+                goto out;
+        }
+
+        cmd = glfs_lockarg->lock->lk_cmd;
+        gf_get_syncop_lkinfo (glfs_lockarg, &gf_flock);
+
+        ret = syncop_lk (subvol, glfd->fd, cmd, &gf_flock);
+        DECODE_SYNCOP_ERR (ret);
+
+out:
+        gf_log (THIS->name, GF_LOG_ERROR,
+                "Returning from glfs_common_lock()........");
+        return ret;
+}
+
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_common_lock, 3.7.0);
+
 struct glfs_fd *
 pub_glfs_dup (struct glfs_fd *glfd)
 {

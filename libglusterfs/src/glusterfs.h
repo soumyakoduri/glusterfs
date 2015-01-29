@@ -296,6 +296,10 @@ typedef enum {
 } glusterfs_lk_cmds_t;
 
 
+/* Special locks flags */
+#define GF_LK_LEASE        0x1 /* Lease lock */
+#define GF_LK_SHARE_RESERV 0x2 /* Share reservations */
+
 typedef enum {
         GF_LK_F_RDLCK = 0,
         GF_LK_F_WRLCK,
@@ -565,6 +569,7 @@ struct gf_flock {
         off_t        l_len;
         pid_t        l_pid;
         gf_lkowner_t l_owner;
+        unsigned int  l_lkflags;
 };
 
 #define GF_MUST_CHECK __attribute__((warn_unused_result))
