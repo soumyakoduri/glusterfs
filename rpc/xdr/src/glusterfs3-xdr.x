@@ -43,6 +43,20 @@ struct gf_iatt {
         unsigned int       ia_ctime_nsec;
 };
 
+
+struct gfs3_upcall_req {
+        opaque         gfid[16];
+        unsigned int   event_type; /* Upcall event type */
+        unsigned int   flags;  /* or mask of events incase of inotify */
+        int            fd; /* file descriptor or Watch descriptor */
+        /* following extra fields are added to be
+           compatible with inotify_event */
+        unsigned int   cookie; /* Unique cookie associating related
+                                  events (for rename(2)) */
+        unsigned int   len; /* Size of name field */
+        string         name<>; /* Optional null-terminated name */
+};
+
 struct gfs3_stat_req {
         opaque gfid[16];
         opaque   xdata<>; /* Extra data */
