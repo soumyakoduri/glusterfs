@@ -584,6 +584,8 @@ get_server_xlator (char *xlator)
                 subvol = GF_XLATOR_ACL;
         if (strcmp (xlator, "locks") == 0)
                 subvol = GF_XLATOR_LOCKS;
+        if (strcmp (xlator, "upcall") == 0)
+                subvol = GF_XLATOR_UPCALL;
         if (strcmp (xlator, "io-threads") == 0)
                 subvol = GF_XLATOR_IOT;
         if (strcmp (xlator, "index") == 0)
@@ -1660,6 +1662,14 @@ server_graph_builder (volgen_graph_t *graph, glusterd_volinfo_t *volinfo,
                 return -1;
 
         ret = check_and_add_debug_xl (graph, set_dict, volname, "locks");
+        if (ret)
+                return -1;
+
+        xl = volgen_graph_add (graph, "features/upcall", volname);
+        if (!xl)
+                return -1;
+
+        ret = check_and_add_debug_xl (graph, set_dict, volname, "upcall");
         if (ret)
                 return -1;
 
