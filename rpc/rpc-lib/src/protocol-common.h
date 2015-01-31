@@ -131,6 +131,7 @@ enum gf_cbk_procnum {
         GF_CBK_INO_FLUSH,
         GF_CBK_EVENT_NOTIFY,
         GF_CBK_GET_SNAPS,
+        GF_CBK_UPCALL,
         GF_CBK_MAXVALUE,
 };
 

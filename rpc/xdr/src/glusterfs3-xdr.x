@@ -43,6 +43,13 @@ struct gf_iatt {
         unsigned int       ia_ctime_nsec;
 };
 
+
+struct gfs3_upcall_req {
+        opaque         gfid[16];
+        unsigned int   event_type;
+        unsigned int   flags;
+};
+
 struct gfs3_stat_req {
         opaque gfid[16];
         opaque   xdata<>; /* Extra data */
