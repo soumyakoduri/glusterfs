@@ -589,6 +589,9 @@ pub_glfs_new (const char *volname)
 
 	INIT_LIST_HEAD (&fs->openfds);
 
+        INIT_LIST_HEAD (&fs->upcall_entry_list.upcall_list);
+        pthread_mutex_init (&fs->upcall_mutex, NULL);
+
 	return fs;
 }
 

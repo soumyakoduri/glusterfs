@@ -1594,3 +1594,99 @@ out:
 
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_h_rename, 3.4.2);
 
+/*
+ * This API is used to poll for upcall events stored in the
+ * upcall list. Current users of this API is NFS-Ganesha.
+ * Incase of any event received, it will be mapped appropriately
+ * into 'callback_arg' along with the handle to be passed to
+ * NFS-Ganesha.
+ */
+int
+pub_glfs_h_poll_upcall (struct glfs *fs, void *data)
+{
+        struct glfs_object  *glhandle = NULL;
+        uuid_t              gfid;
+        upcall_entry        *u_list   = NULL;
+        xlator_t            *subvol   = NULL;
+        inode_t             *newinode = NULL;
+        int                 found     = 0;
+        int                 reason    = 0;
+        struct callback_arg *cbk      = (struct callback_arg *)data;
+
+        if (!fs)
+                goto out;
+
+        __glfs_entry_fs (fs);
+
+        /* get the active volume */
+        subvol = glfs_active_subvol (fs);
+
+        if (!subvol) {
+                errno = EIO;
+                goto out;
+        }
+
+        cbk->glhandle = NULL;
+
+        pthread_mutex_lock (&fs->upcall_mutex);
+        list_for_each_entry (u_list, &fs->upcall_entry_list.upcall_list,
+                             upcall_list) {
+                uuid_copy (gfid, u_list->gfid);
+                gf_log (subvol->name, GF_LOG_WARNING, "In list");
+                newinode = inode_find (subvol->itable, gfid);
+                if (newinode) {
+                        gf_log (subvol->name, GF_LOG_WARNING, "found");
+                        found = 1;
+                        break;
+                }
+        }
+        if (found) {
+                glhandle = GF_CALLOC (1, sizeof(struct glfs_object),
+                                        glfs_mt_glfs_object_t);
+                if (glhandle == NULL) {
+                        errno = ENOMEM;
+                        pthread_mutex_unlock (&fs->upcall_mutex);
+                        goto out;
+                }
+
+                glhandle->inode = newinode;
+                uuid_copy (glhandle->gfid, gfid);
+
+                switch (u_list->event_type) {
+                case CACHE_INVALIDATION:
+                        if (u_list->flags & (~(INODE_UPDATE_FLAGS))) {
+                                /* Invalidate CACHE */
+                                reason = INODE_INVALIDATE;
+                                gf_log (subvol->name, GF_LOG_WARNING,
+                                        "Reason - INODE_INVALIDATION");
+                        } else {
+                                reason = INODE_UPDATE;
+                                gf_log (subvol->name, GF_LOG_WARNING,
+                                        "Reason - INODE_UPDATE");
+                        }
+                        break;
+                default:
+                        break;
+                }
+                list_del_init (&u_list->upcall_list);
+                GF_FREE (u_list);
+
+                /* Instead of glfs_h_stat , maybe there could be a simple way
+                 * of fetching attributes
+                 */
+                glfs_h_stat (fs, glhandle, cbk->buf);
+                cbk->glhandle = glhandle;
+                *cbk->reason = reason;
+                *cbk->flags = u_list->flags;
+        }
+        pthread_mutex_unlock (&fs->upcall_mutex);
+
+        glfs_subvol_done (fs, subvol);
+
+        return 0;
+out:
+        glfs_subvol_done (fs, subvol);
+        return -1;
+}
+
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_h_poll_upcall, 3.7.0);

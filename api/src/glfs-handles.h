@@ -60,6 +60,26 @@
  * glfs_h_create_from_handle */
 #define GFAPI_HANDLE_LENGTH 16
 
+#define UP_NLINK        0x00000001   /* update nlink */
+#define UP_MODE         0x00000002   /* update mode and ctime */
+#define UP_OWN          0x00000004   /* update mode,uid,gid and ctime */
+#define UP_SIZE         0x00000008   /* update fsize */
+#define UP_SIZE_BIG     0x00000010   /* update fsize if bigger */
+#define UP_TIMES        0x00000020   /* update all times */
+#define UP_ATIME        0x00000040   /* update atime only */
+#define UP_PERM         0x00000080   /* update fields needed for permission checking */
+#define UP_RENAME       0x00000100   /* this is a rename op - delete the cache entry */
+
+#define INODE_UPDATE_FLAGS (UP_NLINK | UP_MODE | \
+                            UP_OWN | UP_SIZE | \
+                            UP_SIZE_BIG | UP_TIMES | \
+                            UP_ATIME)
+
+/* reason list for reason in callback_arg */
+#define INODE_INVALIDATE        1
+#define INODE_UPDATE            2
+#define BREAK_DELEGATION        3
+
 /* Portability non glibc c++ build systems */
 #ifndef __THROW
 # if defined __cplusplus
@@ -81,6 +101,15 @@ __BEGIN_DECLS
  */
 struct glfs_object;
 typedef struct glfs_object glfs_object_t;
+
+struct callback_arg {
+        struct glfs             *gl_fs;
+        int                     *reason;
+        struct glfs_object      *glhandle;
+        int                     *flags;
+        struct stat             *buf;
+        unsigned int            *expire_attr;
+};
 
 /* Handle based operations */
 /* Operations that generate handles */
@@ -187,6 +216,10 @@ struct glfs_fd *glfs_h_open (struct glfs *fs, struct glfs_object *object,
 int
 glfs_h_access (struct glfs *fs, struct glfs_object *object, int mask) __THROW
         GFAPI_PUBLIC(glfs_h_access, 3.6.0);
+
+int
+glfs_h_poll_upcall (struct glfs *fs, void *data) __THROW
+        GFAPI_PUBLIC(glfs_h_poll_upcall, 3.7.0);
 
 __END_DECLS
 

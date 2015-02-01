@@ -2298,6 +2298,12 @@ default_notify (xlator_t *this, int32_t event, void *data, ...)
                 }
         }
         break;
+        case GF_EVENT_UPCALL:
+        {
+                if (this->ctx && this->ctx->master)
+                        xlator_notify (this->ctx->master, event, data, NULL);
+        }
+        break;
         default:
         {
                 xlator_list_t *parent = this->parents;
