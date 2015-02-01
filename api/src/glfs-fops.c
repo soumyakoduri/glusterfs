@@ -16,6 +16,7 @@
 #include "glfs.h"
 #include "compat-errno.h"
 #include <limits.h>
+#include "glusterfs3.h"
 
 #ifdef NAME_MAX
 #define GF_NAME_MAX NAME_MAX
@@ -3587,3 +3588,46 @@ out:
 
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_dup, 3.4.0);
 
+/*
+ * This routine is called in case of any notification received
+ * by the server. All the upcall events are queued up in a list
+ * to be read by the applications.
+ */
+void
+priv_glfs_cbk_upcall (struct glfs *fs, void *data)
+{
+        int             ret             = -1;
+        inode_t         *inode          = NULL;
+        uuid_t          gfid;
+        gfs3_upcall_req up_req;
+        struct iovec    *iov            = NULL;
+        struct glfs_object *object      = NULL;
+        upcall_entry    *u_list         = NULL;
+
+        gf_log (THIS->name, GF_LOG_WARNING,
+                "Upcall gfapi callback is called");
+
+        iov = (struct iovec *)data;
+        ret =  xdr_to_generic (*iov, &up_req,
+                               (xdrproc_t)xdr_gfs3_upcall_req);
+
+        gf_log (THIS->name, GF_LOG_WARNING, "Upcall gfapi gfid = %s"
+                "ret = %d", (char *)(up_req.gfid), ret);
+
+        memcpy(gfid, (char *)(up_req.gfid), 16);
+        u_list = GF_CALLOC (1, sizeof(*u_list),
+                            glfs_mt_upcall_entry_t);
+        INIT_LIST_HEAD (&u_list->upcall_list);
+
+        uuid_copy (u_list->gfid, gfid);
+        u_list->event_type = up_req.event_type;
+        u_list->flags = (uint32_t)(up_req.flags);
+
+        pthread_mutex_lock (&fs->upcall_mutex);
+        list_add_tail (&u_list->upcall_list,
+                       &fs->upcall_entry_list.upcall_list);
+        pthread_mutex_unlock (&fs->upcall_mutex);
+        return;
+}
+
+GFAPI_SYMVER_PRIVATE_DEFAULT(glfs_cbk_upcall, 3.7.0);

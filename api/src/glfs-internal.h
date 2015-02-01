@@ -108,6 +108,21 @@
 
 struct glfs;
 
+enum upcall_event_type_t {
+        CACHE_INVALIDATION,
+        RECALL_READ_LEASE,
+        RECALL_READ_WRITE_LEASE
+};
+typedef enum upcall_event_type_t upcall_event_type;
+
+struct _upcall_entry_t {
+        struct list_head  upcall_list;
+        uuid_t            gfid;
+        upcall_event_type event_type;
+        uint32_t          flags;
+};
+typedef struct _upcall_entry_t upcall_entry;
+
 typedef int (*glfs_init_cbk) (struct glfs *fs, int ret);
 
 struct glfs {
@@ -140,6 +155,9 @@ struct glfs {
 	struct list_head    openfds;
 
 	gf_boolean_t        migration_in_progress;
+
+        upcall_entry        upcall_entry_list;
+        pthread_mutex_t     upcall_mutex; /* mutex for upcall entry list */
 };
 
 struct glfs_fd {
@@ -181,6 +199,9 @@ fd_t *glfs_resolve_fd (struct glfs *fs, xlator_t *subvol, struct glfs_fd *glfd);
 fd_t *__glfs_migrate_fd (struct glfs *fs, xlator_t *subvol, struct glfs_fd *glfd);
 
 int glfs_first_lookup (xlator_t *subvol);
+
+void glfs_cbk_upcall (struct glfs *fs, void *data);
+        GFAPI_PRIVATE(glfs_cbk_upcall, 3.7.0);
 
 static inline void
 __glfs_entry_fs (struct glfs *fs)
