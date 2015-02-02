@@ -711,6 +711,62 @@ out:
                 return ret;
 }
 
+int32_t cli_cmd_ganesha_parse (const char **words, int wordcount, dict_t **options,
+                          char **op_errstr)
+{
+	dict_t          *dict    = NULL;
+	int             ret      = -1;
+	int             flags    = 0;
+	char            *key     = NULL;
+	char            *value   = NULL;
+	char            str[100] = {0,};
+	int             i        = 0;
+
+	GF_ASSERT (words);
+	GF_ASSERT (options);
+
+	dict = dict_new ();
+
+	if (!dict)
+		goto out;
+        if (wordcount != 2)
+                goto out;
+
+        key = (char *) words[0];
+	value = (char *) words[1];
+
+        if (!key || !value) {
+		cli_out ("Usage : features.ganesha <enable/disable>");
+		ret = -1;
+		goto out;
+	}
+        ret = gf_strip_whitespace (value, strlen (value));
+	if (ret == -1)
+                goto out;
+	ret = dict_set_str (dict, "key", key);
+        if (ret) {
+               gf_log (THIS->name, GF_LOG_ERROR, "dict set on key failed");
+                goto out;
+        }
+        ret = dict_set_str (dict, "value", value);
+        if (ret) {
+               gf_log (THIS->name, GF_LOG_ERROR, "dict set on value failed");
+                goto out;
+       	}
+	if (strcmp (key, "features.ganesha")) {
+	snprintf (str, sizeof(str), "Global option: error: %s "
+                  "is not a valid global option", key);
+                      *op_errstr = gf_strdup(str);
+                        ret = -1;
+                        goto out;
+	}
+	*options = dict;
+out:
+        if (ret)
+                dict_destroy (dict);
+        return ret;
+}
+
 int32_t
 cli_cmd_quota_parse (const char **words, int wordcount, dict_t **options)
 {

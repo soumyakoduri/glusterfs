@@ -52,9 +52,8 @@
 #define ALL_VOLUME_OPTION_CHECK(volname, key, ret, op_errstr, label)           \
         do {                                                                   \
                 gf_boolean_t    _all = !strcmp ("all", volname);               \
-                gf_boolean_t    _ratio = !strcmp (key,                         \
-                                                  GLUSTERD_QUORUM_RATIO_KEY);  \
-                if (_all && !_ratio) {                                         \
+                gf_boolean_t    _ratio = !strcmp (key, GLUSTERD_QUORUM_RATIO_KEY);\
+                if (_all && !_ratio) {                                          \
                         ret = -1;                                              \
                         *op_errstr = gf_strdup ("Not a valid option for all "  \
                                                 "volumes");                    \
@@ -440,6 +439,21 @@ out:
         return ret;
 }
 
+static int
+glusterd_check_ganesha_cmd (char *key, char *value, char **errstr, dict_t *dict,
+                            glusterd_volinfo_t *volinfo)
+{
+        int                ret = 0;
+        gf_boolean_t       b   = _gf_false;
+        gf_log ("", GF_LOG_INFO, "key is %s", key);
+        if ((strcmp (key, "ganesha.enable") == 0) ||
+           (strcmp (key, "features.ganesha") == 0)) {
+                ret = gf_string2boolean (value, &b);
+                ret = glusterd_handle_ganesha_op(dict, errstr, key, value);
+        }
+        return ret;
+}
+
 int
 glusterd_brick_op_build_payload (glusterd_op_t op, glusterd_brickinfo_t *brickinfo,
                                  gd1_mgmt_brick_op_req **req, dict_t *dict)
@@ -637,6 +651,58 @@ glusterd_validate_quorum_options (xlator_t *this, char *fullkey, char *value,
         opt = xlator_volume_option_get (this, key);
         ret = xlator_option_validate (this, key, value, opt, op_errstr);
 out:
+        return ret;
+}
+
+static int
+glusterd_op_stage_ganesha_cmd (dict_t *dict, char **op_errstr)
+{
+	int                             ret                     = -1;
+	char                            *volname                = NULL;
+        int                             exists                  = 0;
+        char                            *key                    = NULL;
+        char                            *value                  = NULL;
+        char                            str[100]                = {0, } ;
+        int                             dict_count              = 0;
+        int                             flags                   = 0;
+        char                            errstr[2048]            = {0, } ;
+        glusterd_volinfo_t              *volinfo                = NULL;
+        glusterd_conf_t                 *priv                   = NULL;
+        xlator_t                        *this                   = NULL;
+
+        GF_ASSERT (dict);
+        this = THIS;
+      	GF_ASSERT (this);
+        priv = this->private;
+        GF_ASSERT (priv);
+
+	ret = dict_get_str (dict, "key", &key);
+        if (ret) {
+               gf_log (this->name, GF_LOG_ERROR,
+                       "invalid key");
+                goto out;
+       }
+
+        ret = dict_get_str (dict, "value", &value);
+        if (ret) {
+               gf_log (this->name, GF_LOG_ERROR,
+                        "invalid key,value pair in 'global vol set'");
+                ret = -1;
+                goto out;
+        }
+out:
+
+        if (ret) {
+                if (!(*op_errstr)) {
+                        *op_errstr = gf_strdup ("Error, Validation Failed");
+                        gf_log (this->name, GF_LOG_DEBUG,
+                                "Error, Cannot Validate option :%s",
+                                *op_errstr);
+                } else {
+                        gf_log (this->name, GF_LOG_DEBUG,
+                                "Error, Cannot Validate option");
+                }
+        }
         return ret;
 }
 
@@ -1746,7 +1812,7 @@ out:
 }
 
 static int
-glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict)
+glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict, char **op_errstr)
 {
         char            *key            = NULL;
         char            *key_fixed      = NULL;
@@ -1802,8 +1868,7 @@ glusterd_op_set_all_volume_options (xlator_t *this, dict_t *dict)
                  */
                 goto out;
         }
-
-        ret = -1;
+	ret = -1;
         dup_opt = dict_new ();
         if (!dup_opt)
                 goto out;
@@ -1859,7 +1924,83 @@ out:
 }
 
 static int
-glusterd_op_set_volume (dict_t *dict)
+glusterd_op_ganesha_cmd (dict_t *dict, char **errstr)
+{
+	int                                      ret = 0;
+        int                                      flags = 0;
+        glusterd_volinfo_t                      *volinfo = NULL;
+        char                                    *volname = NULL;
+        xlator_t                                *this = NULL;
+        glusterd_conf_t                         *priv = NULL;
+        char                                    *key = NULL;
+        char                                    *value = NULL;
+        char                                     str[50] = {0, };
+        int32_t                                  dict_count = 0;
+	dict_t                                   *dict1 = NULL;
+	dict_t                                  *vol_opts = NULL;
+	int count                                = 0;
+
+        this = THIS;
+        GF_ASSERT (this);
+
+        priv = this->private;
+        GF_ASSERT (priv);
+
+	dict1 = dict_new();
+        ret = dict_get_str (dict, "key", &key);
+        if (ret) {
+               gf_log (this->name, GF_LOG_ERROR,
+                       "invalid key");
+                goto out;
+       }
+
+        sprintf (str, "value%d", 1);
+        ret = dict_get_str (dict, "value", &value);
+        if (ret) {
+               gf_log (this->name, GF_LOG_ERROR,
+                        "invalid key,value pair in 'global option set'");
+                ret = -1;
+                goto out;
+        }
+
+	ret = glusterd_handle_ganesha_op (dict, errstr, key, value);
+	if (ret) {
+		gf_log (this->name, GF_LOG_ERROR,
+		"Initial NFS-Ganesha set up failed");
+		ret = -1;
+		goto out;
+	}
+        ret = dict_set_str(priv->opts, "features.ganesha", value);
+	if (ret) {
+		ret = -1;
+		goto out;
+	}
+
+	 list_for_each_entry(volinfo, &priv->volumes, vol_list) {
+                ret = dict_set_str (dict1, key, volinfo->volname);
+                if (ret)
+                        goto out;
+                vol_opts = volinfo->dict;
+                ret = dict_set_str(vol_opts, "features.ganesha", value);
+
+        }
+
+        ret = glusterd_store_options (this, priv->opts);
+        if (ret) {
+             gf_log (this->name, GF_LOG_ERROR,
+                                "Failed to store options");
+                        goto out;
+	}
+
+out:
+       gf_log (this->name, GF_LOG_DEBUG, "returning %d", ret);
+       return ret;
+}
+
+
+
+static int
+glusterd_op_set_volume (dict_t *dict, char **errstr)
 {
         int                                      ret = 0;
         glusterd_volinfo_t                      *volinfo = NULL;
@@ -1911,7 +2052,7 @@ glusterd_op_set_volume (dict_t *dict)
         }
 
         if (strcasecmp (volname, "all") == 0) {
-                ret = glusterd_op_set_all_volume_options (this, dict);
+                ret = glusterd_op_set_all_volume_options (this, dict, &op_errstr);
                 goto out;
         }
 
@@ -1975,6 +2116,9 @@ glusterd_op_set_volume (dict_t *dict)
                         }
                 }
 
+                ret =  glusterd_check_ganesha_cmd(key, value, errstr, dict, volinfo);
+		if (ret == -1)
+                        goto out;
                 if (!is_key_glusterd_hooks_friendly (key)) {
                         ret = glusterd_check_option_exists (key, &key_fixed);
                         GF_ASSERT (ret);
@@ -3379,6 +3523,12 @@ glusterd_op_build_payload (dict_t **req, char **op_errstr, dict_t *op_ctx)
                                 break;
                         }
 
+                case GD_OP_GANESHA:
+                        {
+                                dict_copy (dict, req_dict);
+                                break;
+                        }
+
                 default:
                         break;
         }
@@ -4697,6 +4847,10 @@ glusterd_op_stage_validate (glusterd_op_t op, dict_t *dict, char **op_errstr,
                         ret = glusterd_op_stage_set_volume (dict, op_errstr);
                         break;
 
+		case GD_OP_GANESHA:
+			ret = glusterd_op_stage_ganesha_cmd (dict, op_errstr);
+			break;
+
                 case GD_OP_RESET_VOLUME:
                         ret = glusterd_op_stage_reset_volume (dict, op_errstr);
                         break;
@@ -4808,8 +4962,11 @@ glusterd_op_commit_perform (glusterd_op_t op, dict_t *dict, char **op_errstr,
                         break;
 
                 case GD_OP_SET_VOLUME:
-                        ret = glusterd_op_set_volume (dict);
+                        ret = glusterd_op_set_volume (dict, op_errstr);
                         break;
+		case GD_OP_GANESHA:
+			ret = glusterd_op_ganesha_cmd (dict, op_errstr);
+			break;
 
                 case GD_OP_RESET_VOLUME:
                         ret = glusterd_op_reset_volume (dict, op_errstr);

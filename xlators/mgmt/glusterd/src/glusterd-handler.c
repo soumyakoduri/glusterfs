@@ -1606,6 +1606,92 @@ glusterd_op_begin (rpcsvc_request_t *req, glusterd_op_t op, void *ctx,
         return ret;
 }
 
+int __glusterd_handle_ganesha_cmd (rpcsvc_request_t *req)
+{
+	int32_t                         ret = -1;
+        gf_cli_req                      cli_req = { {0,} } ;
+        dict_t                          *dict = NULL;
+        glusterd_op_t                   cli_op = GD_OP_GANESHA;
+        char                            *key = NULL;
+        char                            *value = NULL;
+        char                            *volname = NULL;
+        char                            *op_errstr = NULL;
+        gf_boolean_t                    help = _gf_false;
+        char                            err_str[2048] = {0,};
+        xlator_t                        *this = NULL;
+
+        this = THIS;
+        GF_ASSERT (this);
+
+        GF_ASSERT (req);
+
+        ret = xdr_to_generic (req->msg[0], &cli_req, (xdrproc_t)xdr_gf_cli_req);
+        if (ret < 0) {
+                snprintf (err_str, sizeof (err_str), "Failed to decode "
+                          "request received from cli");
+                gf_log (this->name, GF_LOG_ERROR, "%s", err_str);
+                req->rpc_err = GARBAGE_ARGS;
+                goto out;
+        }
+
+        if (cli_req.dict.dict_len) {
+                /* Unserialize the dictionary */
+                dict  = dict_new ();
+
+                ret = dict_unserialize (cli_req.dict.dict_val,
+                                        cli_req.dict.dict_len,
+                                        &dict);
+                if (ret < 0) {
+                        gf_log (this->name, GF_LOG_ERROR,
+                                "failed to "
+                                "unserialize req-buffer to dictionary");
+                        snprintf (err_str, sizeof (err_str), "Unable to decode "
+                                  "the command");
+                        goto out;
+                } else {
+                        dict->extra_stdfree = cli_req.dict.dict_val;
+                }
+        }
+
+	ret = dict_get_str (dict, "key", &key);
+        if (ret) {
+                snprintf (err_str, sizeof (err_str), "Failed to get key while"
+                          " handling global option");
+                gf_log (this->name, GF_LOG_ERROR, "%s", err_str);
+                goto out;
+        }
+
+        ret = dict_get_str (dict, "value", &value);
+        if (ret) {
+                snprintf (err_str, sizeof (err_str), "Failed to get value while"
+                          " setting global option ");
+                gf_log (this->name, GF_LOG_ERROR, "%s", err_str);
+                goto out;
+        }
+	gf_log (this->name, GF_LOG_DEBUG, "Received global option request");
+
+        ret = glusterd_op_begin_synctask (req, GD_OP_GANESHA, dict);
+out:
+        if (ret) {
+                if (err_str[0] == '\0')
+                        snprintf (err_str, sizeof (err_str),
+                                  "Operation failed");
+                ret = glusterd_op_send_cli_response (cli_op, ret, 0, req,
+                                                     dict, err_str);
+        }
+        if (op_errstr)
+                GF_FREE (op_errstr);
+
+        return ret;
+}
+
+
+int
+glusterd_handle_ganesha_cmd (rpcsvc_request_t *req)
+{
+	return glusterd_big_locked_handler (req, __glusterd_handle_ganesha_cmd);
+}
+
 int
 __glusterd_handle_reset_volume (rpcsvc_request_t *req)
 {
@@ -4753,7 +4839,8 @@ rpcsvc_actor_t gd_svc_cli_actors[GLUSTER_CLI_MAXVALUE] = {
         [GLUSTER_CLI_SYS_EXEC]           = {"SYS_EXEC",           GLUSTER_CLI_SYS_EXEC,         glusterd_handle_sys_exec,              NULL, 0, DRC_NA},
         [GLUSTER_CLI_SNAP]               = {"SNAP",               GLUSTER_CLI_SNAP,             glusterd_handle_snapshot,              NULL, 0, DRC_NA},
         [GLUSTER_CLI_BARRIER_VOLUME]     = {"BARRIER_VOLUME",     GLUSTER_CLI_BARRIER_VOLUME,   glusterd_handle_barrier,               NULL, 0, DRC_NA},
-        [GLUSTER_CLI_GET_VOL_OPT]        = {"GET_VOL_OPT",        GLUSTER_CLI_GET_VOL_OPT,      glusterd_handle_get_vol_opt,           NULL, 0, DRC_NA},
+        [GLUSTER_CLI_GANESHA]            = { "GANESHA"  ,         GLUSTER_CLI_GANESHA,          glusterd_handle_ganesha_cmd,           NULL, 0, DRC_NA},
+	[GLUSTER_CLI_GET_VOL_OPT]        = {"GET_VOL_OPT",        GLUSTER_CLI_GET_VOL_OPT,      glusterd_handle_get_vol_opt,           NULL, 0, DRC_NA},
 };
 
 struct rpcsvc_program gd_svc_cli_prog = {
