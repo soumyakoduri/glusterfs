@@ -65,7 +65,7 @@ int create_export_config (char *volname, char **op_errstr)
         int                     ret                        = -1;
         runinit (&runner);
 
-        runner_add_args (&runner, "sh", GANESHA_PREFIX"/create-export-ganesha.sh", volname, NULL);
+        runner_add_args (&runner, "sh", CONFDIR, GANESHA_PREFIX"/create-export-ganesha.sh", volname, NULL);
         ret = runner_run(&runner);
 
         if (ret == -1)
@@ -120,7 +120,7 @@ int  ganesha_manage_export (dict_t *dict, char *value, char **op_errstr)
                 if (strcmp (hostname, brickinfo->hostname) == 0) {
                                 if (strcmp (value, "on") == 0)
                                 create_export_config (volname, op_errstr);
-                        runner_add_args (&runner, "sh", GANESHA_PREFIX"/dbus-send.sh",
+                        runner_add_args (&runner, "sh", CONFDIR, GANESHA_PREFIX"/dbus-send.sh",
                                         value, volname, NULL);
                         ret = runner_run (&runner);
                         }
@@ -146,7 +146,7 @@ int tear_down_cluster(void)
         runner_t runner =       {0,};
         if (is_ganesha_host()) {
         runinit (&runner);
-        runner_add_args (&runner, "sh", GANESHA_PREFIX"/ganesha-ha.sh", "teardown", NULL);
+        runner_add_args (&runner, "sh", CONFDIR, GANESHA_PREFIX"/ganesha-ha.sh", "teardown", NULL);
         ret = runner_run(&runner);
         }
         return ret;
@@ -159,7 +159,7 @@ int setup_cluster(void)
         runner_t runner = {0,};
         if (is_ganesha_host()) {
         runinit (&runner);
-        runner_add_args (&runner, "sh", GANESHA_PREFIX"/ganesha-ha.sh", "setup", NULL);
+        runner_add_args (&runner, "sh", CONFDIR, GANESHA_PREFIX"/ganesha-ha.sh", "setup", NULL);
         ret =  runner_run (&runner);
         }
         return ret;
