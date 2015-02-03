@@ -4615,8 +4615,6 @@ glusterd_nodesvc_start (char *server, gf_boolean_t wait)
                                  "--xlator-option",
                                  "*replicate*.entry-self-heal=off", NULL);
         }
-        runner_log (&runner, "", GF_LOG_DEBUG,
-                    "Starting the nfs/glustershd services");
 
         if (!wait) {
                 ret = runner_run_nowait (&runner);
