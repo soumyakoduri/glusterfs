@@ -1003,7 +1003,12 @@ fi
 %dir %attr(0755,-,-) %{_sharedstatedir}/glusterd/hooks/1/start/post
 %dir %attr(0755,-,-) %{_sharedstatedir}/glusterd/hooks/1/stop
 %dir %attr(0755,-,-) %{_sharedstatedir}/glusterd/hooks/1/stop/pre
-
+#ganesha
+%{_libexecdir}/ganesha/ganesha-ha.sh
+%{_libexecdir}/ganesha/dbus-send.sh
+%{_libexecdir}/ganesha/create-export-ganesha.sh
+%{_sysconfdir}/ganesha/nfs-ganesha.conf
+%{_sysconfdir}/ganesha/ganesha-ha.conf
 %ghost %attr(0644,-,-) %config(noreplace) %{_sharedstatedir}/glusterd/glusterd.info
 %ghost %attr(0600,-,-) %{_sharedstatedir}/glusterd/options
 # This is really ugly, but I have no idea how to mark these directories in
@@ -1030,6 +1035,15 @@ fi
 %ghost      %attr(0600,-,-) %{_sharedstatedir}/glusterd/nfs/run/nfs.pid
 
 %changelog
+
+* Fri Feb 20 2015 Meghana Madhusudhan <mmadhusu@redhat.com>
+- Added ganesha related config files and scripts %files server
+  section.
+
+* Fri Feb 13 2015 Gaurav Kumar Garg <ggarg@redhat.com>
+- .cmd_log_history file should be renamed to cmd_history.log post
+  upgrade (#1165996)
+
 * Fri Jan 30 2015 Nandaja Varma <nvarma@redhat.com>
 - remove checks for rpmbuild/mock from run-tests.sh (#178008)
 

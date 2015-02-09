@@ -180,6 +180,9 @@ AC_CONFIG_FILES([Makefile
                 extras/init.d/glusterd-Redhat
                 extras/init.d/glusterd-FreeBSD
                 extras/init.d/glusterd-SuSE
+                extras/ganesha/Makefile
+                extras/ganesha/config/Makefile
+                extras/ganesha/scripts/Makefile
                 extras/systemd/Makefile
                 extras/systemd/glusterd.service
                 extras/run-gluster.tmpfiles
