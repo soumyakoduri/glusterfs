@@ -125,6 +125,7 @@ add_upcall_client (call_frame_t *frame, uuid_t gfid, client_t *client,
         up_client_entry->trans = (rpc_transport_t *)client->trans;
         up_client_entry->access_time = time(NULL);
         INIT_LIST_HEAD (&up_client_entry->lease_entries.lease_list);
+        pthread_mutex_init (&up_client_entry->upcall_lease_mutex, NULL);
 
         pthread_mutex_lock (&(*up_entry)->upcall_client_mutex);
         list_add_tail (&up_client_entry->client_list,
@@ -133,7 +134,7 @@ add_upcall_client (call_frame_t *frame, uuid_t gfid, client_t *client,
 
         gf_log (THIS->name, GF_LOG_INFO, "upcall_entry client added - %s",
                 up_client_entry->client_uid);
-
+        return up_client_entry;
 }
 
 /*
@@ -235,43 +236,42 @@ upcall_lease_check (call_frame_t *frame, client_t *client, uuid_t gfid,
          * TODO: For rename & unlink fops, recall the delegation even if its
          * from the same client.
          */
+        if (up_client->lease_cnt > 0) {
         if (up_client->lease == READ_WRITE_LEASE) {
                 GF_ASSERT ((*up_entry)->lease_cnt == 1);
                 if ((frame->op == GF_FOP_RENAME) ||
                     (frame->op == GF_FOP_UNLINK)) {
                         RECALL_LEASE(frame, n_event_data, gfid,
-                                     up_client_entry);
-                        up_client_entry->lease =
+                                     up_client);
+                        up_client->lease =
                                      RECALL_READ_WRITE_LEASE_IN_PROGRESS;
                         recall_sent = _gf_true;
                 }
                 goto out;
         } else if (up_client->lease == READ_LEASE) {
                 if ((frame->op == GF_FOP_RENAME) ||
-                    (frame->op == GF_FOP_UNLINK)) {
+                    (frame->op == GF_FOP_UNLINK) || is_write) {
                         RECALL_LEASE(frame, n_event_data, gfid,
-                                     up_client_entry);
-                        up_client_entry->lease =
+                                     up_client);
+                        up_client->lease =
                                      RECALL_READ_LEASE_IN_PROGRESS;
                         recall_sent = _gf_true;
-                } else if (is_write) {
-                        /* usually same application client will not send for
-                         * write access when it has taken read_lease.
-                         * return error in that case.
-                         */
-                         goto err;
                 }
                 if ((*up_entry)->lease_cnt == 1)
                         goto out;
         } else {
                 recall_sent = _gf_true;
+
+#ifdef PURGE_LEASE
                 if (time(NULL) > (up_client->recall_time + LEASE_PERIOD)) {
                         /* Purge the expired lease */
-                        purge_lease (*up_entry, up_client_entry, client);
+                        purge_lease (*up_entry, up_client, client);
                 }
+#endif
                 if ((*up_entry)->lease_cnt == 1) {
                         goto out;
                 }
+        }
         }
 
         pthread_mutex_lock (&(*up_entry)->upcall_client_mutex);
@@ -307,6 +307,7 @@ upcall_lease_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                          * XXX: As per rfc, server shoudnt recall
                                          * lease if CB_PATH_DOWN.
                                          */
+#ifdef PURGE_LEASE
                                         if (time(NULL) >
                                                  (up_client_entry->recall_time +
                                                          LEASE_PERIOD)) {
@@ -317,6 +318,7 @@ upcall_lease_check (call_frame_t *frame, client_t *client, uuid_t gfid,
                                                         up_client_entry->client_uid);
                                                 purge_lease (*up_entry, up_client_entry, client);
                                         }
+#endif
                                          if ((*up_entry)->lease_cnt == 1) {
                                                  /* No More READ_LEASES present */
                                                 goto unlock;
@@ -397,11 +399,12 @@ int purge_lease (upcall_entry *up_entry, upcall_client *up_client, client_t *cli
         call_frame_t       *tmp_frame = NULL;
         xlator_t           *bound_xl = NULL;
         char               *path     = NULL;
-        upcall_lease       *lease;
-        upcall_local_t     *local;
+        upcall_lease       *lease = NULL;
+        upcall_local_t     *local = NULL;
 
         bound_xl = client->bound_xl;
 
+        pthread_mutex_lock (&up_client->upcall_lease_mutex);
         list_for_each_entry (lease, &up_client->lease_entries.lease_list, lease_list) {
 
                 fd = lease->fd;
@@ -412,7 +415,7 @@ int purge_lease (upcall_entry *up_entry, upcall_client *up_client, client_t *cli
                                 goto out;
                         }
 
-                        local = upcall_local_init(tmp_frame, 0);
+                        local = upcall_local_init(tmp_frame, up_entry->gfid);
                         if (!local) {
                                 errno = ENOMEM;
                                 goto out;
@@ -446,6 +449,7 @@ int purge_lease (upcall_entry *up_entry, upcall_client *up_client, client_t *cli
                                     bound_xl, bound_xl->fops->flush, fd, NULL);
                 }
         }
+        pthread_mutex_lock (&up_client->upcall_lease_mutex);
 
         ret = 0;
 
@@ -477,6 +481,7 @@ remove_lease (call_frame_t *frame, client_t *client, fd_t *fd, uuid_t gfid)
                 }
         }
 
+        pthread_mutex_lock (&up_client_entry->upcall_lease_mutex);
         list_for_each_entry (up_lease, &up_client_entry->lease_entries.lease_list,
                              lease_list) {
 /*                if (is_same_lkowner(&lk_owner, &c_lkowner)) { */
@@ -486,11 +491,17 @@ remove_lease (call_frame_t *frame, client_t *client, fd_t *fd, uuid_t gfid)
                         break;
                 }
         }
+        pthread_mutex_unlock (&up_client_entry->upcall_lease_mutex);
 
         if (!found) {
                 gf_log (THIS->name, GF_LOG_WARNING, "No lease lock found - %s",
                         client->client_uid);
-                return -1;
+                /* similar to Unlock, lets return success */
+                /* It may so happen that application tried to release the lock
+                 * and we may have purged it at the same time.
+                 * XXX: Need to investigate.
+                 */
+                return 0;
         }
 
         GF_FREE (up_lease);
@@ -516,7 +527,7 @@ add_lease (call_frame_t *frame, client_t *client, uuid_t gfid,
         upcall_client *up_client_entry = NULL;
         upcall_entry  *up_entry        = NULL;
         gf_lkowner_t   lk_owner;
-        upcall_lease  *up_lease;
+        upcall_lease  *up_lease = NULL;
 
         lk_owner = frame->root->lk_owner;
 
@@ -551,8 +562,10 @@ add_lease (call_frame_t *frame, client_t *client, uuid_t gfid,
         up_client_entry->lease_cnt++;
         up_lease->fd = fd;
         up_lease->lkowner = frame->root->lk_owner;
+        pthread_mutex_lock (&up_client_entry->upcall_lease_mutex);
         list_add_tail(&up_lease->lease_list,
                       &up_client_entry->lease_entries.lease_list);
+        pthread_mutex_unlock (&up_client_entry->upcall_lease_mutex);
 
         up_entry->lease_cnt++;
         gf_log (THIS->name, GF_LOG_WARNING, "Lease added - %s",
@@ -586,7 +599,7 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                 up_client = get_upcall_client (frame, gfid, client, &up_entry);
                 if (!up_client) {
                         gf_log (THIS->name, GF_LOG_WARNING, "Client entry (%s) not found ",
-                                up_client_entry->client_uid);
+                                client->client_uid);
                         return;
                 }
         }
@@ -613,7 +626,11 @@ upcall_cache_invalidate (call_frame_t *frame, client_t *client, uuid_t gfid, voi
                                                   up_client_entry->client_uid);
                                         frame->this->notify (frame->this, GF_EVENT_UPCALL,
                                                              &n_event_data);
-                                 }
+                                 } else {
+                                        gf_log (THIS->name, GF_LOG_DEBUG,
+                                                 "Cache invalidation notification NOT sent to %s",
+                                                  up_client_entry->client_uid);
+                                }
                         }
                 }
         }

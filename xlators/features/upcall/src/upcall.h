@@ -99,6 +99,7 @@ struct _upcall_client_t {
         time_t access_time; /* time last accessed */
         lease_type lease;
         upcall_lease lease_entries;
+        pthread_mutex_t upcall_lease_mutex; /* mutex for lease list of this upcall client entry */
         /* incase if there multiple lease lock requests for the same client */
         unsigned int lease_cnt;
         /* maybe club this with access_time */

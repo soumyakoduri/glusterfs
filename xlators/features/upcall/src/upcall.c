@@ -385,7 +385,7 @@ up_lk (call_frame_t *frame, xlator_t *this,
          * Skip the check if its unlock request. Reason being
          *      if its LEASE_RETURN request we need not send recalls
          *      if its unlock request, the reason there is a lock present means that
-         *      there are leases on that file taken from other client;
+         *      there are no leases on that file taken from other client;
          */
         if (flock->l_type != GF_LK_F_UNLCK) {
                 CHECK_LEASE (frame, client, local->gfid,
@@ -393,6 +393,10 @@ up_lk (call_frame_t *frame, xlator_t *this,
         }
 
         if (is_lease_enabled) {
+                if (!IA_ISREG(fd->inode->ia_type)) {
+                        op_errno = EINVAL;
+                        goto err;
+                }
                 gf_log (this->name, GF_LOG_INFO, "In up_lk, in"
                         " is_lease_enabled block");
                 local->is_lease_enabled = _gf_true;
