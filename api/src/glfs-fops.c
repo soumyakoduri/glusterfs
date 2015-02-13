@@ -3500,19 +3500,17 @@ gf_get_syncop_lkinfo (struct glfs_lock_args *glfs_lockarg,
 
 
 int
-pub_glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
+pub_glfs_common_lock (struct glfs_fd *glfd, int cmd,
+                      struct glfs_lock_args *glfs_lockarg)
 {
         int             ret         = -1;
         xlator_t        *subvol     = NULL;
-        struct glfs_fd  *glfd       = NULL;
         struct gf_flock gf_flock    = {0, };
-        int             cmd         = -1;
         fd_t            *fd         = NULL;
 
         gf_log (THIS->name, GF_LOG_ERROR, "In glfs_common_lock()........");
 
         assert (glfs_lockarg);
-        glfd = glfs_lockarg->glfd;
         assert (glfd);
 
         __glfs_entry_fd (glfd);
@@ -3531,7 +3529,6 @@ pub_glfs_common_lock (struct glfs_lock_args *glfs_lockarg)
                 goto out;
         }
 
-        cmd = glfs_lockarg->lock->lk_cmd;
         gf_get_syncop_lkinfo (glfs_lockarg, &gf_flock);
 
         ret = syncop_lk (subvol, glfd->fd, cmd, &gf_flock);

@@ -75,15 +75,12 @@ typedef struct glfs glfs_t;
 #define OP_LK_SHARE_RESERV   0x00000002
 
 struct glock {
-        int    lk_cmd;
         void   *lock_owner;
         struct flock flock;
 };
 
 struct glfs_lock_args {
         struct glock *lock;
-        struct glfs_fd *glfd;
-        int    reclaim;
         int    lock_type; /* to differentiate different types of locks set */
         void   *reserved;
 };
@@ -785,7 +782,8 @@ int glfs_posix_lock (glfs_fd_t *fd, int cmd, struct flock *flock) __THROW
  * - Lease locks
  * - Open Share reservations
  */
-int glfs_common_lock (struct glfs_lock_args *glfs_lockarg) __THROW
+int glfs_common_lock (glfs_fd_t *fd, int cmd,
+                      struct glfs_lock_args *glfs_lockarg) __THROW
         GFAPI_PUBLIC(glfs_common_lock, 3.7.0);
 
 glfs_fd_t *glfs_dup (glfs_fd_t *fd) __THROW
