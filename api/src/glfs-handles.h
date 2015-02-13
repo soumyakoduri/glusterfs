@@ -218,7 +218,7 @@ glfs_h_access (struct glfs *fs, struct glfs_object *object, int mask) __THROW
         GFAPI_PUBLIC(glfs_h_access, 3.6.0);
 
 int
-pub_glfs_h_poll_upcall (struct glfs *fs, void *data);
+glfs_h_poll_upcall (struct glfs *fs, void *data) __THROW
         GFAPI_PUBLIC(glfs_h_poll_upcall, 3.7.0);
 
 __END_DECLS
