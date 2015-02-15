@@ -27,6 +27,12 @@
 #include "authenticate.h"
 #include "event.h"
 
+rpcsvc_cbk_program_t server_cbk_prog = {
+        .progname  = "Gluster Callback",
+        .prognum   = GLUSTER_CBK_PROGRAM,
+        .progver   = GLUSTER_CBK_VERSION,
+};
+
 void
 grace_time_handler (void *data)
 {
@@ -1079,17 +1085,59 @@ notify (xlator_t *this, int32_t event, void *data, ...)
         dict_t      *dict = NULL;
         dict_t      *output = NULL;
         va_list      ap;
+        client_t    *client = NULL;
+        char        *client_uid = NULL;
+        void        *up_req = NULL;
+        server_conf_t   *conf = NULL;
+        rpc_transport_t *xprt = NULL;
 
         dict = data;
         va_start (ap, data);
         output = va_arg (ap, dict_t*);
         va_end (ap);
 
+        conf = this->private;
+        if (!conf)
+                return 0;
+
         switch (event) {
+        case GF_EVENT_UPCALL:
+        {
+                ret = dict_get_str (dict, "client-uid", &client_uid);
+                if (ret) {
+                        goto out;
+                }
+
+                ret = dict_get_ptr (dict, "upcall-request", &up_req);
+                if (ret) {
+                        goto out;
+                }
+
+                pthread_mutex_lock (&conf->mutex);
+                {
+                        list_for_each_entry (xprt, &conf->xprt_list, list) {
+                                client = xprt->xl_private;
+                                if (!strcmp(client->client_uid,
+                                                    client_uid)){
+                                        rpcsvc_request_submit(
+                                                conf->rpc, xprt,
+                                                &server_cbk_prog,
+                                                GF_CBK_UPCALL,
+                                                (gfs3_upcall_req *)up_req,
+                                                this->ctx,
+                                                (xdrproc_t)xdr_gfs3_upcall_req);
+                                        break;
+                                }
+                        }
+                }
+                pthread_mutex_unlock (&conf->mutex);
+                break;
+        }
         default:
                 default_notify (this, event, data);
                 break;
         }
+out:
         return ret;
 }
 
