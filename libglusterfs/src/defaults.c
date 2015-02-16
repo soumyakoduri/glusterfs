@@ -2291,6 +2291,9 @@ default_notify (xlator_t *this, int32_t event, void *data, ...)
         {
                 xlator_list_t *parent = this->parents;
 
+                if (!parent && this->ctx && this->ctx->master)
+                        xlator_notify (this->ctx->master, event, data, NULL);
+
                 while (parent) {
                         if (parent->xlator->init_succeeded)
                                 xlator_notify (parent->xlator, event,
