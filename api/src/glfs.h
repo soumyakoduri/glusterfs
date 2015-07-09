@@ -967,6 +967,83 @@ typedef void (*glfs_upcall_cbk) (struct glfs_upcall *up_arg, void *data);
 #define GLFS_EVENT_INODE_INVALIDATE    0x00000001 /* invalidate cache entry */
 #define GLFS_EVENT_ANY                 0xffffffff /* for all the above events */
 
+/* Lease Types */
+enum lease_types {
+        RD_LEASE = 1,
+        RW_LEASE = 2,
+};
+typedef enum lease_types lease_types_t;
+
+/* Lease cmds */
+enum lease_cmds {
+        GET_LEASE = 1,
+        SET_LEASE = 2,
+        UNLK_LEASE = 3,
+};
+typedef enum lease_cmds lease_cmds_t;
+
+#define LEASE_ID_SIZE 16 /* 128bits */
+struct glfs_lease {
+        lease_cmds_t  cmd;
+        lease_types_t lease_type;
+        char          lease_id[LEASE_ID_SIZE];
+        unsigned int  lease_flags;
+};
+
+typedef void (*glfs_recall_cbk) (struct glfs_lease lease, void *data);
+
+/*
+  SYNOPSIS
+
+  glfs_lease: Takes a lease on a file.
+
+  DESCRIPTION
+
+  This function takes lease on an open file.
+
+  PARAMETERS
+
+  @glfd: The fd of the file on which lease should be taken,
+   this fd is returned by glfs_open/glfs_create.
+
+  @lease: Struct that defines the lease operation to be performed
+   on the file.
+      @lease.cmd - Can be one of the following values
+         GF_GET_LEASE:  Get the lease type currently present on the file,
+                        lease.lease_type will contain GF_RD_LEASE
+                        or GF_RW_LEASE or 0 if no leases.
+         GF_SET_LEASE:  Set the lease of given lease.lease_type on the file.
+         GF_UNLK_LEASE: Unlock the lease present on the given fd.
+                        Note that the every lease request should have
+                        a corresponding unlk_lease.
+
+      @lease.lease_type - Can be one of the following values
+         GF_RD_LEASE:   Read lease on a file, shared lease.
+         GF_RW_LEASE:   Read-Write lease on a file, exclusive lease.
+
+      @lease.lease_id - A unique identification of lease, 128bits.
+
+  @fn: This is the function that is invoked when the lease has to be recalled
+  @data: It is a cookie, this pointer is returned as a part of recall
+
+  fn and data field are stored as a part of glfs_fd, hence if there are multiple
+  glfs_lease calls, each of them updates the fn and data fileds. glfs_recall_cbk
+  will be invoked with the last updated fn and data
+
+  RETURN VALUES
+  0:  Successfull completion
+  <0: Failure. @errno will be set with the type of failure
+*/
+
+int glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
+                glfs_recall_cbk fn, void *data) __THROW
+        GFAPI_PUBLIC(glfs_lease, 3.11.0);
+
+int glfs_set_fop_attr (unsigned long lk_owner, char *lease_id) __THROW
+        GFAPI_PUBLIC(glfs_set_fop_attr, 3.11.0);
+
+__END_DECLS
+
 /*
  * SYNOPSIS
  *

@@ -40,7 +40,7 @@
  */
 
 #define GLFS_GFAPI_BASE             GLFS_MSGID_COMP_API
-#define GLFS_NUM_MESSAGES           50
+#define GLFS_NUM_MESSAGES           52
 #define GLFS_MSGID_END              (GLFS_GFAPI_BASE + GLFS_NUM_MESSAGES + 1)
 /* Messages with message IDs */
 #define glfs_msg_start_x GLFS_GFAPI_BASE, "Invalid: Start of messages"
@@ -96,7 +96,8 @@
 #define API_MSG_INODE_LINK_FAILED               (GLFS_GFAPI_BASE + 48)
 #define API_MSG_STATEDUMP_FAILED                (GLFS_GFAPI_BASE + 49)
 #define API_MSG_XREADDIRP_R_FAILED              (GLFS_GFAPI_BASE + 50)
-
+#define API_MSG_INODE_FIND_FAILED               (GLFS_GFAPI_BASE + 51)
+#define API_MSG_FDCTX_SET_FAILED                (GLFS_GFAPI_BASE + 52)
 /*------------*/
 #define glfs_msg_end_x GLFS_MSGID_END, "Invalid: End of messages"
 
