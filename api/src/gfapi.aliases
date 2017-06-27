@@ -170,3 +170,4 @@ _pub_glfs_upcall_unregister _glfs_upcall_unregister$GFAPI_3.13.0
 
 _pub_glfs_lease _glfs_lease$GFAPI_4.0.0
 _pub_glfs_h_lease _glfs_h_lease$GFAPI_4.0.0
+_pub_glfs_set_fop_attr _glfs_set_fop_attr$GFAPI_4.0.0

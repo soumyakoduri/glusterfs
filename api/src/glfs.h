@@ -1109,5 +1109,8 @@ int
 glfs_upcall_unregister (struct glfs *fs, uint32_t event_list);
         GFAPI_PUBLIC(glfs_upcall_unregister, 3.13.0);
 
+int glfs_set_fop_attr (unsigned long lk_owner, char *lease_id) __THROW
+        GFAPI_PUBLIC(glfs_set_fop_attr, 4.0.0);
+
 __END_DECLS
 #endif /* !_GLFS_H */

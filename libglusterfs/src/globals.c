@@ -101,6 +101,7 @@ static pthread_key_t uuid_buf_key;
 static char          global_uuid_buf[GF_UUID_BUF_SIZE];
 static pthread_key_t lkowner_buf_key;
 static char          global_lkowner_buf[GF_LKOWNER_BUF_SIZE];
+static pthread_key_t leaseid_key;
 static pthread_key_t leaseid_buf_key;
 static int gf_global_mem_acct_enable = 1;
 static pthread_once_t globals_inited = PTHREAD_ONCE_INIT;
@@ -457,6 +458,51 @@ glusterfs_leaseid_buf_get ()
         return buf;
 }
 
+void
+glusterfs_leaseid_destroy (void *ptr)
+{
+        FREE (ptr);
+}
+
+int
+glusterfs_leaseid_init ()
+{
+        int ret = 0;
+
+        ret = pthread_key_create (&leaseid_key,
+                                  glusterfs_leaseid_destroy);
+        return ret;
+}
+
+char *
+glusterfs_leaseid_get ()
+{
+        char         *leaseid = NULL;
+        int           ret     = -1;
+
+        leaseid = pthread_getspecific (leaseid_key);
+        if (!leaseid) {
+                leaseid = CALLOC (1, LEASE_ID_SIZE);
+                if (!leaseid)
+                        goto out;
+
+                ret = pthread_setspecific (leaseid_key, leaseid);
+                if (ret != 0) {
+                        FREE (leaseid);
+                        leaseid = NULL;
+                        goto out;
+                }
+        }
+out:
+        return leaseid;
+}
+
+char *
+glusterfs_leaseid_exist ()
+{
+        return pthread_getspecific (leaseid_key);
+}
+
 static void
 gf_globals_init_once ()
 {
@@ -487,6 +533,13 @@ gf_globals_init_once ()
         if (ret) {
                 gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_LEASEID_BUF_INIT_FAILED,
                         "ERROR: glusterfs leaseid buffer init failed");
+                goto out;
+        }
+
+        ret = glusterfs_leaseid_init ();
+        if (ret) {
+                gf_msg ("", GF_LOG_CRITICAL, 0, LG_MSG_LEASEID_INIT_FAILED,
+                        "ERROR: glusterfs leaseid init failed");
                 goto out;
         }
 

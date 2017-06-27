@@ -596,6 +596,103 @@ pub_glfs_setfsgroups (size_t size, const gid_t *list)
 
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_setfsgroups, 3.4.2);
 
+int
+pub_glfs_set_fop_attr (unsigned long lk_owner, char *lease_id)
+{
+        int           ret     = 0;
+        char         *leaseid = NULL;
+        gf_lkowner_t  lkowner = {0,};
+
+        if (lease_id) {
+                leaseid = glusterfs_leaseid_get ();
+                if (leaseid)
+                        memcpy (leaseid, lease_id, LEASE_ID_SIZE);
+                else
+                        ret = -1;
+        }
+
+        if (lk_owner) {
+                set_lk_owner_from_uint64 (&lkowner, lk_owner);
+                syncopctx_setfslkowner (&lkowner);
+        }
+
+        return ret;
+}
+
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_set_fop_attr, 4.0.0);
+
+int
+get_fop_attr_glfd (dict_t **fop_attr, struct glfs_fd *glfd)
+{
+        char *leaseid = NULL;
+        int   ret     = 0;
+
+        leaseid = GF_CALLOC (1, LEASE_ID_SIZE, gf_common_mt_char);
+        GF_CHECK_ALLOC_AND_LOG("gfapi", leaseid, ret, "lease id alloc failed", out);
+
+        memcpy (leaseid, glfd->lease_id, LEASE_ID_SIZE);
+
+        *fop_attr = dict_new ();
+        GF_CHECK_ALLOC_AND_LOG("gfapi", *fop_attr, ret, "dict_new failed", out);
+
+        ret = dict_set_bin (*fop_attr, "lease-id", leaseid, LEASE_ID_SIZE);
+out:
+        if (ret) {
+                GF_FREE (leaseid);
+                if (*fop_attr)
+                        dict_destroy (*fop_attr);
+                *fop_attr = NULL;
+        }
+
+        return ret;
+}
+
+int
+set_fop_attr_glfd (struct glfs_fd *glfd)
+{
+        char     *lease_id = NULL;
+        int       ret      = -1;
+
+        lease_id = glusterfs_leaseid_exist ();
+        if (lease_id) {
+                memcpy (glfd->lease_id, lease_id, LEASE_ID_SIZE);
+                ret = 0;
+        }
+        return ret;
+}
+
+int
+get_fop_attr_thrd_key (dict_t **fop_attr)
+{
+        char     *lease_id = NULL;
+        int       ret      = 0;
+
+        lease_id = glusterfs_leaseid_exist ();
+        if (lease_id) {
+                *fop_attr = dict_new ();
+                if (!fop_attr) {
+                }
+                ret = dict_set_static_bin (*fop_attr, "lease-id", lease_id, LEASE_ID_SIZE);
+                if (ret) {
+                }
+        }
+        return ret;
+}
+
+void
+unset_fop_attr (dict_t **fop_attr)
+{
+        char     *lease_id = NULL;
+
+        lease_id = glusterfs_leaseid_exist ();
+        if (lease_id)
+                memset (lease_id, 0, LEASE_ID_SIZE);
+
+        if (*fop_attr) {
+                dict_unref (*fop_attr);
+                *fop_attr = NULL;
+        }
+}
 
 struct glfs *
 pub_glfs_from_glfd (struct glfs_fd *glfd)

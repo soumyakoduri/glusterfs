@@ -267,6 +267,7 @@ pub_glfs_open (struct glfs *fs, const char *path, int flags)
 	loc_t            loc = {0, };
 	struct iatt      iatt = {0, };
 	int              reval = 0;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FS (fs, invalid_fs);
@@ -318,7 +319,16 @@ retry:
 	}
         glfd->fd->flags = flags;
 
-	ret = syncop_open (subvol, &loc, flags, glfd->fd, NULL, NULL);
+        ret = set_fop_attr_glfd (glfd);
+        if (ret == 0) {
+                ret = get_fop_attr_glfd (&fop_attr, glfd);
+                if (ret) {
+                        ret = -1;
+                        goto out;
+                }
+        }
+
+	ret = syncop_open (subvol, &loc, flags, glfd->fd, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 
 	ESTALE_RETRY (ret, errno, reval, &loc, retry);
@@ -334,6 +344,7 @@ out:
 
 	glfs_subvol_done (fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -782,6 +793,7 @@ pub_glfs_preadv (struct glfs_fd *glfd, const struct iovec *iovec, int iovcnt,
 	int             cnt = 0;
 	struct iobref  *iobref = NULL;
 	fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -804,8 +816,14 @@ pub_glfs_preadv (struct glfs_fd *glfd, const struct iovec *iovec, int iovcnt,
 
 	size = iov_length (iovec, iovcnt);
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
 	ret = syncop_readv (subvol, fd, size, offset, 0, &iov, &cnt, &iobref,
-                            NULL, NULL);
+                            fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 	if (ret <= 0)
 		goto out;
@@ -828,6 +846,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -980,6 +999,7 @@ pub_glfs_preadv_async (struct glfs_fd *glfd, const struct iovec *iovec,
 	xlator_t       *subvol = NULL;
 	glfs_t         *fs = NULL;
 	fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1033,9 +1053,15 @@ pub_glfs_preadv_async (struct glfs_fd *glfd, const struct iovec *iovec,
 
 	frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
 	STACK_WIND_COOKIE (frame, glfs_preadv_async_cbk, subvol, subvol,
 			   subvol->fops->readv, fd, iov_length (iovec, count),
-			   offset, flags, NULL);
+			   offset, flags, fop_attr);
 
 out:
         if (ret) {
@@ -1053,6 +1079,7 @@ out:
 		glfs_subvol_done (fs, subvol);
 	}
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 	return ret;
@@ -1168,6 +1195,7 @@ pub_glfs_pwritev (struct glfs_fd *glfd, const struct iovec *iovec, int iovcnt,
 	struct iobuf   *iobuf = NULL;
 	struct iovec    iov = {0, };
 	fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1192,7 +1220,13 @@ pub_glfs_pwritev (struct glfs_fd *glfd, const struct iovec *iovec, int iovcnt,
         if (ret)
                 goto out;
 
-	ret = syncop_writev (subvol, fd, &iov, 1, offset, iobref, flags, NULL,
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
+	ret = syncop_writev (subvol, fd, &iov, 1, offset, iobref, flags, fop_attr,
                              NULL);
         DECODE_SYNCOP_ERR (ret);
 
@@ -1213,6 +1247,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -1296,6 +1331,7 @@ pub_glfs_pwritev_async (struct glfs_fd *glfd, const struct iovec *iovec,
         fd_t           *fd = NULL;
         struct iobref  *iobref = NULL;
         struct iobuf   *iobuf = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1349,6 +1385,12 @@ pub_glfs_pwritev_async (struct glfs_fd *glfd, const struct iovec *iovec,
 
         frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
         STACK_WIND_COOKIE (frame, glfs_pwritev_async_cbk, subvol, subvol,
                            subvol->fops->writev, fd, gio->iov,
                            gio->count, offset, flags, iobref, NULL);
@@ -1372,6 +1414,7 @@ out:
         if (iobref)
                 iobref_unref (iobref);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -1437,6 +1480,7 @@ pub_glfs_fsync (struct glfs_fd *glfd)
 	int              ret = -1;
 	xlator_t        *subvol = NULL;
 	fd_t            *fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1457,7 +1501,12 @@ pub_glfs_fsync (struct glfs_fd *glfd)
 		goto out;
 	}
 
-	ret = syncop_fsync (subvol, fd, 0, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+	ret = syncop_fsync (subvol, fd, 0, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
 	if (fd)
@@ -1467,6 +1516,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -1495,6 +1545,7 @@ glfs_fsync_async_common (struct glfs_fd *glfd, glfs_io_cbk fn, void *data,
         call_frame_t   *frame = NULL;
         xlator_t       *subvol = NULL;
         fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         /* Need to take explicit ref so that the fd
          * is not destroyed before the fop is complete
@@ -1537,6 +1588,12 @@ glfs_fsync_async_common (struct glfs_fd *glfd, glfs_io_cbk fn, void *data,
 
         frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
         STACK_WIND_COOKIE (frame, glfs_fsync_async_cbk, subvol, subvol,
                            subvol->fops->fsync, fd, dataonly, NULL);
 
@@ -1551,6 +1608,7 @@ out:
                 glfs_subvol_done (glfd->fs, subvol);
         }
 
+        unset_fop_attr (&fop_attr);
         return ret;
 }
 
@@ -1580,6 +1638,7 @@ pub_glfs_fdatasync (struct glfs_fd *glfd)
 	int              ret = -1;
 	xlator_t        *subvol = NULL;
 	fd_t            *fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1600,7 +1659,13 @@ pub_glfs_fdatasync (struct glfs_fd *glfd)
 		goto out;
 	}
 
-	ret = syncop_fsync (subvol, fd, 1, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
+	ret = syncop_fsync (subvol, fd, 1, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
 	if (fd)
@@ -1610,6 +1675,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -1644,6 +1710,7 @@ pub_glfs_ftruncate (struct glfs_fd *glfd, off_t offset)
 	int              ret = -1;
 	xlator_t        *subvol = NULL;
 	fd_t            *fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1664,7 +1731,12 @@ pub_glfs_ftruncate (struct glfs_fd *glfd, off_t offset)
 		goto out;
 	}
 
-	ret = syncop_ftruncate (subvol, fd, offset, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+	ret = syncop_ftruncate (subvol, fd, offset, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
 	if (fd)
@@ -1674,6 +1746,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -1746,6 +1819,7 @@ pub_glfs_ftruncate_async (struct glfs_fd *glfd, off_t offset, glfs_io_cbk fn,
         call_frame_t   *frame = NULL;
         xlator_t       *subvol = NULL;
         fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -1787,6 +1861,12 @@ pub_glfs_ftruncate_async (struct glfs_fd *glfd, off_t offset, glfs_io_cbk fn,
 
         frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
         STACK_WIND_COOKIE (frame, glfs_ftruncate_async_cbk, subvol, subvol,
                            subvol->fops->ftruncate, fd, offset, NULL);
 
@@ -1804,6 +1884,7 @@ out:
                 glfs_subvol_done (glfd->fs, subvol);
         }
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -2208,6 +2289,7 @@ retry:
 		goto out;
 	}
 
+        /* TODO: Add leaseid */
 	ret = syncop_unlink (subvol, &loc, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 
@@ -2329,8 +2411,8 @@ retrynew:
                 }
         }
 
-	/* TODO: check if new or old is a prefix of the other, and fail EINVAL */
-
+	/* TODO: - check if new or old is a prefix of the other, and fail EINVAL
+                 - Add leaseid */
 	ret = syncop_rename (subvol, &oldloc, &newloc, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 
@@ -2602,6 +2684,7 @@ pub_glfs_discard_async (struct glfs_fd *glfd, off_t offset, size_t len,
         call_frame_t   *frame = NULL;
         xlator_t       *subvol = NULL;
         fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -2644,6 +2727,12 @@ pub_glfs_discard_async (struct glfs_fd *glfd, off_t offset, size_t len,
 
         frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
         STACK_WIND_COOKIE (frame, glfs_discard_async_cbk, subvol, subvol,
                            subvol->fops->discard, fd, offset, len, NULL);
 
@@ -2660,6 +2749,7 @@ out:
                 glfs_subvol_done (glfd->fs, subvol);
         }
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -2690,6 +2780,7 @@ pub_glfs_zerofill_async (struct glfs_fd *glfd, off_t offset, off_t len,
         call_frame_t   *frame = NULL;
         xlator_t       *subvol = NULL;
         fd_t           *fd = NULL;
+        dict_t         *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -2732,6 +2823,12 @@ pub_glfs_zerofill_async (struct glfs_fd *glfd, off_t offset, off_t len,
 
         frame->local = gio;
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
         STACK_WIND_COOKIE (frame, glfs_zerofill_async_cbk, subvol, subvol,
                            subvol->fops->zerofill, fd, offset, len, NULL);
         ret = 0;
@@ -2747,6 +2844,7 @@ out:
                 glfs_subvol_done (glfd->fs, subvol);
         }
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -3089,6 +3187,7 @@ retry:
 	if (ret)
 		goto out;
 
+        /* TODO: Add leaseid */
 	ret = syncop_setattr (subvol, &loc, iatt, valid, 0, 0, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 
@@ -3131,6 +3230,7 @@ glfs_fsetattr (struct glfs_fd *glfd, struct iatt *iatt, int valid)
 		goto out;
 	}
 
+        /* TODO: Add leaseid */
 	ret = syncop_fsetattr (subvol, fd, iatt, valid, 0, 0, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
@@ -3948,6 +4048,7 @@ pub_glfs_fallocate (struct glfs_fd *glfd, int keep_size, off_t offset, size_t le
 	int              ret = -1;
 	xlator_t        *subvol = NULL;
 	fd_t		*fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -3968,7 +4069,12 @@ pub_glfs_fallocate (struct glfs_fd *glfd, int keep_size, off_t offset, size_t le
 		goto out;
 	}
 
-	ret = syncop_fallocate (subvol, fd, keep_size, offset, len, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+	ret = syncop_fallocate (subvol, fd, keep_size, offset, len, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
 	if (fd)
@@ -3978,6 +4084,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -3993,6 +4100,7 @@ pub_glfs_discard (struct glfs_fd *glfd, off_t offset, size_t len)
 	int              ret = -1;
 	xlator_t        *subvol = NULL;
 	fd_t		*fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -4013,7 +4121,12 @@ pub_glfs_discard (struct glfs_fd *glfd, off_t offset, size_t len)
 		goto out;
 	}
 
-	ret = syncop_discard (subvol, fd, offset, len, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+	ret = syncop_discard (subvol, fd, offset, len, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
 	if (fd)
@@ -4023,6 +4136,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -4038,6 +4152,7 @@ pub_glfs_zerofill (struct glfs_fd *glfd, off_t offset, off_t len)
         int               ret             = -1;
         xlator_t         *subvol          = NULL;
         fd_t             *fd              = NULL;
+        dict_t           *fop_attr        = NULL;
 
         DECLARE_OLD_THIS;
         __GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -4056,7 +4171,12 @@ pub_glfs_zerofill (struct glfs_fd *glfd, off_t offset, off_t len)
                 goto out;
         }
 
-        ret = syncop_zerofill (subvol, fd, offset, len, NULL, NULL);
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+        ret = syncop_zerofill (subvol, fd, offset, len, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 out:
         if (fd)
@@ -4066,6 +4186,7 @@ out:
 
         glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -4353,6 +4474,7 @@ pub_glfs_posix_lock (struct glfs_fd *glfd, int cmd, struct flock *flock)
 	struct gf_flock  gf_flock = {0, };
 	struct gf_flock  saved_flock = {0, };
 	fd_t            *fd = NULL;
+        dict_t          *fop_attr = NULL;
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -4382,6 +4504,12 @@ pub_glfs_posix_lock (struct glfs_fd *glfd, int cmd, struct flock *flock)
                         goto out;
         }
 
+        ret = get_fop_attr_glfd (&fop_attr, glfd);
+        if (ret) {
+                ret = -1;
+                goto out;
+        }
+
 	ret = syncop_lk (subvol, fd, cmd, &gf_flock, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 	gf_flock_to_flock (&gf_flock, flock);
@@ -4396,6 +4524,7 @@ out:
 
 	glfs_subvol_done (glfd->fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:
@@ -4761,6 +4890,7 @@ glfs_anonymous_pwritev (struct glfs *fs, struct glfs_object *object,
         iov.iov_base = iobuf_ptr (iobuf);
         iov.iov_len = size;
 
+        /* TODO: Set leaseid */
         ret = syncop_writev (subvol, fd, &iov, 1, offset, iobref, flags,
                              NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
@@ -4830,6 +4960,7 @@ glfs_anonymous_preadv (struct glfs *fs,  struct glfs_object *object,
 
         size = iov_length (iovec, iovcnt);
 
+        /* TODO: Set leaseid */
 	ret = syncop_readv (subvol, fd, size, offset, flags, &iov, &cnt,
                             &iobref, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
@@ -5006,20 +5137,21 @@ out:
 }
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_xreaddirplus_get_stat, 3.11.0);
 
-void
-gf_lease_to_glfs_lease (struct gf_lease *gf_lease, struct glfs_lease *lease)
+gf_lease_to_glfs_lease (struct gf_lease *gf_lease, struct glfs_lease *lease, gf_boolean_t valid_lid)
 {
         lease->cmd = gf_lease->cmd;
         lease->lease_type = gf_lease->lease_type;
-        memcpy (lease->lease_id, gf_lease->lease_id, LEASE_ID_SIZE);
+        if (valid_lid)
+                memcpy (lease->lease_id, gf_lease->lease_id, LEASE_ID_SIZE);
 }
 
 void
-glfs_lease_to_gf_lease (struct glfs_lease *lease, struct gf_lease *gf_lease)
+glfs_lease_to_gf_lease (struct glfs_lease *lease, struct gf_lease *gf_lease, gf_boolean_t valid_lid)
 {
         gf_lease->cmd = lease->cmd;
         gf_lease->lease_type = lease->lease_type;
-        memcpy (gf_lease->lease_id, lease->lease_id, LEASE_ID_SIZE);
+        if (valid_lid)
+                memcpy (gf_lease->lease_id, lease->lease_id, LEASE_ID_SIZE);
 }
 
 static int
@@ -5056,6 +5188,10 @@ pub_glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
         xlator_t        *subvol = NULL;
         fd_t            *fd = NULL;
         struct gf_lease  gf_lease = {0, };
+<<<<<<< b49aae3bb880169d17417a8e513392a6fa1ae051
+=======
+        gf_boolean_t     valid_lid = _gf_true;
+>>>>>>> gfapi: Add api to set lkowner and leaseid
 
         DECLARE_OLD_THIS;
 	__GLFS_ENTRY_VALIDATE_FD (glfd, invalid_fs);
@@ -5063,9 +5199,20 @@ pub_glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
         GF_REF_GET (glfd);
 
         if (!is_valid_lease_id (lease->lease_id)) {
+<<<<<<< b49aae3bb880169d17417a8e513392a6fa1ae051
                 ret = -1;
                 errno = EINVAL;
                 goto out;
+=======
+                if (is_valid_lease_id (glfd->lease_id)) {
+                        memcpy (gf_lease.lease_id, glfd->lease_id, LEASE_ID_SIZE);
+                        valid_lid = _gf_false;
+                } else {
+                        ret = -1;
+                        errno = EINVAL;
+                        goto out;
+                }
+>>>>>>> gfapi: Add api to set lkowner and leaseid
         }
 
         subvol = glfs_active_subvol (glfd->fs);
@@ -5109,12 +5256,20 @@ pub_glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
                 break;
         }
 
+<<<<<<< b49aae3bb880169d17417a8e513392a6fa1ae051
         glfs_lease_to_gf_lease (lease, &gf_lease);
+=======
+        glfs_lease_to_gf_lease (lease, &gf_lease, valid_lid);
+>>>>>>> gfapi: Add api to set lkowner and leaseid
 
         ret = syncop_lease (subvol, &loc, &gf_lease, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 
+<<<<<<< b49aae3bb880169d17417a8e513392a6fa1ae051
         gf_lease_to_glfs_lease (&gf_lease, lease);
+=======
+        gf_lease_to_glfs_lease (&gf_lease, lease, valid_lid);
+>>>>>>> gfapi: Add api to set lkowner and leaseid
 
         if (ret == 0)
                 ret = glfd_update_lease_info (subvol, glfd, fn, data);
@@ -5142,4 +5297,8 @@ invalid_fs:
         return ret;
 }
 
+<<<<<<< b49aae3bb880169d17417a8e513392a6fa1ae051
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_lease, 3.11.0);
+=======
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_lease, 4.0.0);
+>>>>>>> gfapi: Add api to set lkowner and leaseid

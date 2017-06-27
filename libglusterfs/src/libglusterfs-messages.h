@@ -1793,6 +1793,7 @@
  */
 
 #define LG_MSG_UTIMENSAT_FAILED                          (GLFS_LG_BASE + 210)
+#define LG_MSG_LEASEID_INIT_FAILED                       (GLFS_LG_BASE + 211)
 
 /*!
  * @messageid

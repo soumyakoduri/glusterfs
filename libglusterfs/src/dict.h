@@ -120,6 +120,7 @@ int32_t dict_allocate_and_serialize (dict_t *this, char **buf, u_int *length);
 
 void dict_unref (dict_t *dict);
 dict_t *dict_ref (dict_t *dict);
+void dict_destroy (dict_t *dict);
 data_t *data_ref (data_t *data);
 void data_unref (data_t *data);
 

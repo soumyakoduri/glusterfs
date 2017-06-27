@@ -224,4 +224,5 @@ GFAPI_3.13.0 {
 GFAPI_4.0.0 {
                 glfs_lease;
                 glfs_h_lease;
+                glfs_set_fop_attr;
 } GFAPI_3.13.0;

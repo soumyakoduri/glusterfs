@@ -128,6 +128,10 @@ char *glusterfs_lkowner_buf_get (void);
 /* leaseid buf */
 char *glusterfs_leaseid_buf_get (void);
 
+char *glusterfs_leaseid_get ();
+
+char *glusterfs_leaseid_exist ();
+
 /* init */
 int glusterfs_globals_init (glusterfs_ctx_t *ctx);
 

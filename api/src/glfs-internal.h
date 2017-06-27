@@ -617,5 +617,25 @@ gf_lease_to_glfs_lease (struct gf_lease *gf_lease, struct glfs_lease *lease);
 void
 glfs_lease_to_gf_lease (struct glfs_lease *lease, struct gf_lease *gf_lease);
 
+void
+gf_lease_to_glfs_lease (struct gf_lease *gf_lease, struct glfs_lease *lease,
+                        gf_boolean_t valid_lid);
+
+void
+glfs_lease_to_gf_lease (struct glfs_lease *lease, struct gf_lease *gf_lease,
+                        gf_boolean_t valid_lid);
+
+int
+get_fop_attr_glfd (dict_t **fop_attr, struct glfs_fd *glfd);
+
+int
+set_fop_attr_glfd (struct glfs_fd *glfd);
+
+int
+get_fop_attr_thrd_key (dict_t **fop_attr);
+
+void
+unset_fop_attr (dict_t **fop_attr);
+
 void glfs_release_upcall (void *ptr);
 #endif /* !_GLFS_INTERNAL_H */

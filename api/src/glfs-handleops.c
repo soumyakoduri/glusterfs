@@ -2474,12 +2474,12 @@ pub_glfs_h_lease (struct glfs *fs, struct glfs_object *object,
         /* populate loc */
         GLFS_LOC_FILL_INODE (inode, loc, out);
 
-        glfs_lease_to_gf_lease (lease, &gf_lease);
+        glfs_lease_to_gf_lease (lease, &gf_lease, _gf_true);
 
         ret = syncop_lease (subvol, &loc, &gf_lease, NULL, NULL);
         DECODE_SYNCOP_ERR (ret);
 
-        gf_lease_to_glfs_lease (&gf_lease, lease);
+        gf_lease_to_glfs_lease (&gf_lease, lease, _gf_true);
 
 out:
         loc_wipe (&loc);
@@ -2495,4 +2495,4 @@ invalid_fs:
         return ret;
 }
 
-GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_h_lease, 3.11.0);
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_h_lease, 4.0.0);
