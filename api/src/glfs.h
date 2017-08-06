@@ -1042,7 +1042,6 @@ int glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
 int glfs_set_fop_attr (unsigned long lk_owner, char *lease_id) __THROW
         GFAPI_PUBLIC(glfs_set_fop_attr, 3.11.0);
 
-__END_DECLS
 
 /*
  * SYNOPSIS

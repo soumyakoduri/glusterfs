@@ -619,7 +619,7 @@ pub_glfs_set_fop_attr (unsigned long lk_owner, char *lease_id)
         return ret;
 }
 
-GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_set_fop_attr, 4.0.0);
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_set_fop_attr, 3.11.0);
 
 int
 get_fop_attr_glfd (dict_t **fop_attr, struct glfs_fd *glfd)

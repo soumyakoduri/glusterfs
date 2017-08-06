@@ -622,6 +622,7 @@ pub_glfs_h_open (struct glfs *fs, struct glfs_object *object, int flags)
         xlator_t        *subvol = NULL;
         inode_t         *inode = NULL;
         loc_t            loc = {0, };
+        dict_t          *fop_attr = NULL;
 
         /* validate in args */
         if ((fs == NULL) || (object == NULL)) {
@@ -677,8 +678,17 @@ pub_glfs_h_open (struct glfs *fs, struct glfs_object *object, int flags)
         /* populate loc */
         GLFS_LOC_FILL_INODE (inode, loc, out);
 
+        ret = set_fop_attr_glfd (glfd);
+        if (ret == 0) {
+                ret = get_fop_attr_glfd (&fop_attr, glfd);
+                if (ret) {
+                        ret = -1;
+                        goto out;
+                }
+        }
+
         /* fop/op */
-        ret = syncop_open (subvol, &loc, flags, glfd->fd, NULL, NULL);
+        ret = syncop_open (subvol, &loc, flags, glfd->fd, fop_attr, NULL);
         DECODE_SYNCOP_ERR (ret);
 
         glfd->fd->flags = flags;
@@ -698,6 +708,7 @@ out:
 
         glfs_subvol_done (fs, subvol);
 
+        unset_fop_attr (&fop_attr);
         __GLFS_EXIT_FS;
 
 invalid_fs:

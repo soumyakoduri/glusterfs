@@ -1129,7 +1129,8 @@ check_lease_conflict (call_frame_t *frame, inode_t *inode,
                                 errno = EAGAIN;
                                 ret = -1;
                         }
-                }
+                } else
+                        ret = WIND_FOP;
         }
 unlock:
         pthread_mutex_unlock (&lease_ctx->lock);

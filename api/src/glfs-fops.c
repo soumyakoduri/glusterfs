@@ -5271,8 +5271,8 @@ pub_glfs_lease (struct glfs_fd *glfd, struct glfs_lease *lease,
         gf_lease_to_glfs_lease (&gf_lease, lease, valid_lid);
 >>>>>>> gfapi: Add api to set lkowner and leaseid
 
-        if (ret == 0)
-                ret = glfd_update_lease_info (subvol, glfd, fn, data);
+//        if (ret == 0)
+//                ret = glfd_update_lease_info (subvol, glfd, fn, data);
 
         /* TODO: Add leases for client replay
         if (ret == 0 && (cmd == F_SETLK || cmd == F_SETLKW))
@@ -5283,13 +5283,13 @@ out:
         if (fd)
                 fd_unref (fd);
 
+        if (subvol)
+                glfs_subvol_done (glfd->fs, subvol);
+
         if (glfd) {
                 GF_REF_PUT (glfd);
                 glfd = NULL;
         }
-
-        if (subvol)
-                glfs_subvol_done (glfd->fs, subvol);
 
         __GLFS_EXIT_FS;
 
