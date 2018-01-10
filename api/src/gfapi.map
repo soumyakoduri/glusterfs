@@ -223,4 +223,6 @@ GFAPI_3.13.0 {
 
 GFAPI_4.0.0 {
                 glfs_setfsleaseid;
+                glfs_lease;
+                glfs_h_lease;
 } GFAPI_3.13.0;
