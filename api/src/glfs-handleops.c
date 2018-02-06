@@ -2091,7 +2091,10 @@ pub_glfs_h_poll_upcall (struct glfs *fs, struct glfs_upcall **up_arg)
 
         if (upcall_data) {
                 switch (upcall_data->event_type) {
-                case GF_UPCALL_CACHE_INVALIDATION:
+                case GF_UPCALL_EVENT_NULL:
+                /* no 'default:' label, to force handling all upcall events */
+                        errno = ENOENT;
+                        break;
                         *up_arg = GLFS_CALLOC (1, sizeof (struct gf_upcall),
                                                glfs_release_upcall,
                                                glfs_mt_upcall_entry_t);
@@ -2100,10 +2103,14 @@ pub_glfs_h_poll_upcall (struct glfs *fs, struct glfs_upcall **up_arg)
                                 break; /* goto free u_list */
                         }
 
+                case GF_UPCALL_CACHE_INVALIDATION:
                         /* XXX: Need to revisit this to support
                          * GLFS_UPCALL_INODE_UPDATE if required. */
                         ret = glfs_h_poll_cache_invalidation (fs, *up_arg,
                                                               upcall_data);
+                case GF_UPCALL_RECALL_LEASE:
+                        ret = glfs_recall_lease_inode (fs, *up_arg,
+                                                       upcall_data);
                         if (ret
                             || (*up_arg)->reason == GLFS_UPCALL_EVENT_NULL) {
                                 /* It could so happen that the file which got
@@ -2121,10 +2128,6 @@ pub_glfs_h_poll_upcall (struct glfs *fs, struct glfs_upcall **up_arg)
                         gf_log ("glfs_h_poll_upcall", GF_LOG_DEBUG,
                                 "UPCALL_RECALL_LEASE is not implemented yet");
                 /* fallthrough till we support leases */
-                case GF_UPCALL_EVENT_NULL:
-                /* no 'default:' label, to force handling all upcall events */
-                        errno = ENOENT;
-                        break;
                 }
 
                 GF_FREE (u_list->upcall_data.data);

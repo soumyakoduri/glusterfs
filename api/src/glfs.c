@@ -1511,6 +1511,20 @@ pub_glfs_upcall_inode_get_oldpstat (struct glfs_upcall_inode *arg)
 GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_upcall_inode_get_oldpstat, 3.7.16);
 
 
+struct glfs_object*
+pub_glfs_upcall_lease_get_object (struct glfs_upcall_recall_inode *arg)
+{
+        return arg->object;
+}
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_upcall_lease_get_object, 4.0.0);
+
+uint32_t
+pub_glfs_upcall_lease_get_lease_type (struct glfs_upcall_lease *arg)
+{
+        return arg->lease_type;
+}
+GFAPI_SYMVER_PUBLIC_DEFAULT(glfs_upcall_lease_get_lease_type, 4.0.0);
+
 /* definitions of the GLFS_SYSRQ_* chars are in glfs.h */
 static struct glfs_sysrq_help {
         char  sysrq;

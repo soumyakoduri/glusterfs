@@ -133,6 +133,41 @@ out:
 }
 
 int
+glfs_get_upcall_lease (struct gf_upcall *to_up_data,
+                             struct gf_upcall *from_up_data)
+{
+
+        struct gf_upcall_recall_lease *ca_data = NULL;
+        struct gf_upcall_recall_lease *f_ca_data = NULL;
+        int                                 ret      = -1;
+
+        GF_VALIDATE_OR_GOTO (THIS->name, to_up_data, out);
+        GF_VALIDATE_OR_GOTO (THIS->name, from_up_data, out);
+
+        f_ca_data = from_up_data->data;
+        GF_VALIDATE_OR_GOTO (THIS->name, f_ca_data, out);
+
+        ca_data = GF_CALLOC (1, sizeof(*ca_data),
+                            glfs_mt_upcall_entry_t);
+
+        if (!ca_data) {
+                gf_msg (THIS->name, GF_LOG_ERROR, errno,
+                        API_MSG_ALLOC_FAILED,
+                        "Upcall entry allocation failed.");
+                goto out;
+        }
+
+        to_up_data->data = ca_data;
+
+        ca_data->lease_type   = f_ca_data->lease_type;
+        ca_data->tid = f_ca_data->tid;
+        ca_data->dict       = f_ca_data->dict;
+
+        ret = 0;
+out:
+        return ret;
+}
+int
 glfs_loc_link (loc_t *loc, struct iatt *iatt)
 {
 	int ret = -1;
@@ -4513,6 +4548,10 @@ glfs_enqueue_upcall_data (struct glfs *fs, struct gf_upcall *upcall_data)
                 ret = glfs_get_upcall_cache_invalidation (&u_list->upcall_data,
                                                           upcall_data);
                 break;
+        case GF_UPCALL_ECALL_LEASE
+                ret = glfs_get_upcall_lease (&u_list->upcall_data,
+                                                   upcall_data);
+                break;
         default:
                 break;
         }
@@ -4541,6 +4580,146 @@ out:
 }
 
 static void
+glfs_free_upcall_lease (void *to_free)
+{
+        struct glfs_upcall_lease *arg = to_free;
+
+        if (!arg)
+                return;
+
+        if (arg->object)
+                glfs_h_close (arg->object);
+
+        GF_FREE (arg);
+}
+
+int
+glfs_recall_lease (struct glfs *fs,
+                   struct glfs_upcall *up_arg,
+                   struct gf_upcall *up_data)
+{
+        struct gf_upcall_recall_lease *recall_lease = NULL;
+        struct glfs_object                  *object       = NULL;
+        xlator_t                      *subvol       = NULL;
+        int                            ret          = 0;
+        struct glfs_upcall_lease            *up_lease_arg = NULL;
+/*        inode_t                       *inode        = NULL;
+        struct glfs_fd                *glfd         = NULL;
+        struct glfs_fd                *tmp          = NULL;
+        fd_t                          *fd           = NULL;
+        uint64_t                       value        = 0;
+        struct list_head               glfd_list;
+        struct glfs_lease              lease        = {0, };*/
+
+        GF_VALIDATE_OR_GOTO ("gfapi", up_data, out);
+        GF_VALIDATE_OR_GOTO ("gfapi", fs, out);
+
+        INIT_LIST_HEAD (&glfd_list);
+
+        recall_lease = up_data->data;
+        GF_VALIDATE_OR_GOTO ("gfapi", recall_lease, out);
+
+        subvol = glfs_active_subvol (fs);
+        if (!subvol) {
+                ret = -1;
+                errno = EIO;
+                goto out;
+        }
+
+        gf_msg_debug (THIS->name, 0,
+                      "Recall lease received for gfid:%s",
+                      uuid_utoa(up_data->gfid));
+
+        object = glfs_h_find_handle (fs, up_data->gfid,
+                                     GFAPI_HANDLE_LENGTH);
+        if (!object) {
+                /* The reason handle creation will fail is because we
+                 * couldn't find the inode in the gfapi inode table.
+                 *
+                 * But since application would have taken inode_ref, the
+                 * only case when this can happen is when it has closed
+                 * the handle and hence will no more be interested in
+                 * the upcall for this particular gfid.
+                 */
+                gf_msg (THIS->name, GF_LOG_DEBUG, errno,
+                        API_MSG_CREATE_HANDLE_FAILED,
+                        "handle creation of %s failed",
+                         uuid_utoa (upcall_data->gfid));
+                errno = ESTALE;
+                goto out;
+        }
+
+/*
+        inode = inode_find (subvol->itable, up_data->gfid);
+        if (!inode) {
+                ret = -1;
+                gf_msg (THIS->name, GF_LOG_ERROR, errno,
+                        API_MSG_INODE_FIND_FAILED,
+                        "Unable to find inode entry for gfid:%s graph id:%d",
+                        uuid_utoa(up_data->gfid), subvol->graph->id);
+                goto out;
+        }
+
+        LOCK (&inode->lock);
+        {
+                list_for_each_entry (fd, &inode->fd_list, inode_list) {
+                        ret = fd_ctx_get (fd, subvol, &value);
+                        glfd = (void *) value;
+                        if (glfd) {
+                                gf_msg_trace (THIS->name, 0,
+                                              "glfd (%p) has held lease", glfd);
+                                GF_REF_GET (glfd);
+                                list_add_tail (&glfd->list, &glfd_list);
+                        }
+                }
+        }
+        UNLOCK (&inode->lock);
+
+        list_for_each_entry_safe (glfd, tmp, &glfd_list, list) {
+                LOCK (&glfd->lock);
+                {
+                        if (glfd->state != GLFD_CLOSE)
+                                gf_msg_trace (THIS->name, 0,
+                                              "glfd (%p) has held lease, "
+                                              "calling recall cbk", glfd);
+                                glfd->recall_cbk (lease, glfd->cookie);
+                }
+                UNLOCK (&glfd->lock);
+
+                list_del_init (&glfd->list);
+                GF_REF_PUT (glfd);
+        }
+*/
+        up_lease_arg = GF_CALLOC (1, sizeof (struct glfs_upcall_lease),
+                                  glfs_mt_upcall_inode_t);
+        up_lease_arg->object = object;
+
+        GF_VALIDATE_OR_GOTO ("glfs_recall_lease",
+                             up_lease_arg, out);
+
+
+        up_lease->inode_arg->lease_type = recall_lease->lease_type;
+
+        up_arg->reason = GLFS_UPCALL_RECALL_LEASE;
+        up_arg->event = up_lease_arg;
+        up_arg->free_event = glfs_free_upcall_lease;
+
+        ret = 0;
+
+out:
+        if (ret) {
+                /* Close p_object and oldp_object as well if being referenced.*/
+                if (object)
+                        glfs_h_close (object);
+
+                /* Set reason to prevent applications from using ->event */
+                up_arg->reason = GLFS_UPCALL_EVENT_NULL;
+                GF_FREE (up_inode_arg);
+        }
+        return ret;
+}
+
+static void
 glfs_cbk_upcall_data (struct glfs *fs, struct gf_upcall *upcall_data)
 {
         int ret = -1;
@@ -4566,6 +4745,9 @@ glfs_cbk_upcall_data (struct glfs *fs, struct gf_upcall *upcall_data)
         switch (upcall_data->event_type) {
         case GF_UPCALL_CACHE_INVALIDATION:
                 ret = glfs_h_poll_cache_invalidation (fs, up_arg, upcall_data);
+                break;
+        case GF_UPCALL_RECALL_LEASE:
+                ret = glfs_recall_lease (fs, up_arg, upcall_data);
                 break;
         default:
                 errno = EINVAL;
@@ -4656,9 +4838,14 @@ priv_glfs_process_upcall_event (struct glfs *fs, void *data)
                       (char *)(upcall_data->gfid));
 
         /* *
-         * TODO: RECALL LEASE
-         * Refer issue #350
-         * Proposed patch https://review.gluster.org/#/c/14019/
+         * TODO: RECALL LEASE for each glfd
+         *
+         * In case of RECALL_LEASE, we could associate separate
+         * cbk function for each glfd either by
+         * - extending pub_glfs_lease to accept new args (recall_cbk_fn, cookie)
+         * - or by defining new API "glfs_register_recall_cbk_fn (glfd, recall_cbk_fn, cookie)
+         * . In such cases, flag it and instead of calling below upcall functions, define
+         * a new one to go through the glfd list and invoke each of theirs recall_cbk_fn.
          * */
 
         if (fs->up_cbk) { /* upcall cbk registered */

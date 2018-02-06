@@ -254,6 +254,16 @@ struct glfs_upcall_inode {
         struct stat           oldp_buf; /* Latest stat of old parent dir handle */
 };
 
+struct glfs_upcall_lease {
+        struct glfs_object   *object;  /* Object which need to be acted upon */
+        uint32_t  lease_type; /* Lease type to which client can downgrade to*/
+};
+
+struct glfs_upcall_lease_fd {
+        uint32_t  lease_type; /* Lease type to which client can downgrade to*/
+        void   *fd_cookie;  /* Object which need to be acted upon */
+};
+
 struct glfs_xreaddirp_stat {
         struct stat st; /* Stat for that dirent - corresponds to GFAPI_XREADDIRP_STAT */
         struct glfs_object *object; /* handled for GFAPI_XREADDIRP_HANDLE */
